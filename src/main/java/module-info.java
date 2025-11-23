@@ -1,4 +1,4 @@
-module io.github.vimasig.bozar {
+module cn.jeyor1337.bozarxd {
     requires com.google.gson;
     requires commons.cli;
     requires javafx.controls;
@@ -12,6 +12,6 @@ module io.github.vimasig.bozar {
     requires org.objectweb.asm.util;
     requires static lombok;
 
-    opens io.github.vimasig.bozar.obfuscator.utils.model;
-    opens io.github.vimasig.bozar.ui;
+    opens cn.jeyor1337.bozarxd.obfuscator.utils.model;
+    opens cn.jeyor1337.bozarxd.ui;
 }
