@@ -7,13 +7,17 @@ import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarConfig;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.tree.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public class InvokeDynamicTransformer extends ClassTransformer {
 
     private static final String BOOTSTRAP_METHOD_NAME = "bootstrap";
     private static final String BOOTSTRAP_METHOD_DESC = "(Ljava/lang/invoke/MethodHandles$Lookup;" +
             "Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;";
 
-    private boolean hasBootstrapMethod = false;
+    // Track which classes need bootstrap methods (fix for bug where instance variables were overwritten)
+    private final Set<String> classesNeedingBootstrap = new HashSet<>();
     private String currentClassName;
 
     public InvokeDynamicTransformer(Bozar bozar) {
@@ -23,7 +27,6 @@ public class InvokeDynamicTransformer extends ClassTransformer {
     @Override
     public void transformClass(ClassNode classNode) {
         this.currentClassName = classNode.name;
-        this.hasBootstrapMethod = false;
     }
 
     @Override
@@ -40,7 +43,8 @@ public class InvokeDynamicTransformer extends ClassTransformer {
 
                 // Only process static method calls
                 if (methodInsn.getOpcode() == INVOKESTATIC && shouldObfuscate(methodInsn.owner, methodInsn.name)) {
-                    hasBootstrapMethod = true;
+                    // Mark this class as needing a bootstrap method
+                    classesNeedingBootstrap.add(currentClassName);
 
                     Handle bootstrapHandle = new Handle(
                             H_INVOKESTATIC,
@@ -66,8 +70,8 @@ public class InvokeDynamicTransformer extends ClassTransformer {
 
     @Override
     public boolean transformOutput(ClassNode classNode) {
-        // Add bootstrap method if needed
-        if (hasBootstrapMethod && currentClassName != null && currentClassName.equals(classNode.name)) {
+        // Add bootstrap method if this class needs one
+        if (classesNeedingBootstrap.contains(classNode.name)) {
             addBootstrapMethod(classNode);
         }
         return true;

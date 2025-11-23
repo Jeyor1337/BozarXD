@@ -13,7 +13,6 @@
             <scope>runtime</scope>
             <excludes>
                 <exclude>org.openjfx:*</exclude>
-                <exclude>org.ow2.asm:*</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>

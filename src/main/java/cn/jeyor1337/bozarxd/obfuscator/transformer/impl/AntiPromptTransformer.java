@@ -2,6 +2,7 @@ package cn.jeyor1337.bozarxd.obfuscator.transformer.impl;
 
 import cn.jeyor1337.bozarxd.obfuscator.Bozar;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.ClassTransformer;
+import cn.jeyor1337.bozarxd.obfuscator.utils.ASMUtils;
 import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarCategory;
 import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarConfig;
 import org.objectweb.asm.Label;
@@ -45,6 +46,9 @@ public class AntiPromptTransformer extends ClassTransformer {
 
     @Override
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
+        // Skip abstract methods and methods in interfaces - they cannot have code
+        if(!ASMUtils.isMethodEligibleToModify(classNode, methodNode)) return;
+
         // Inject anti-prompt instructions at the beginning
         InsnList startInsns = new InsnList();
         startInsns.add(new TypeInsnNode(NEW, "java/lang/String"));
