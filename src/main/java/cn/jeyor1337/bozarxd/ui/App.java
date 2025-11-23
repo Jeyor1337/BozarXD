@@ -17,6 +17,10 @@ import java.io.IOException;
 
 public class App extends Application {
 
+    public static void main(String[] args) {
+        launch(args);
+    }
+
     @Override
     public void start(Stage stage) throws IOException {
         // FX GUI
@@ -93,6 +97,7 @@ public class App extends Application {
         options.addOption(new Option( "cfg", "config", true, "Config file."));
         options.addOption(new Option( "noupdate", "Disable update warnings"));
         options.addOption(new Option("c", "console", false, "Application will run without GUI and obfuscation task will be started immediately."));
+        options.addOption(new Option("init", false, "Generate template configuration file in current directory."));
         return options;
     }
 }

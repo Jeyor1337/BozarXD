@@ -23,21 +23,58 @@ Let me know if obfuscator fails. Submit an [issue](https://github.com/Jeyor1337/
 
 ## Building
 Some older maven versions have issues compiling this project.\
-In such a case, use the latest version of maven to fix.
-```
+In such a case, use the latest version of maven (3.9+) to fix.
+
+**Requirements:** Java 21, Maven 3.9+
+
+```bash
 git clone https://github.com/Jeyor1337/BozarXD
 cd BozarXD
+
+# Compile and run with GUI
 mvn compile javafx:run
+
+# Build JAR with dependencies
+mvn clean package assembly:single
+
+# Just compile
+mvn compile
 ```
+
+The built JAR will be located at `target/BozarXD-1.7.0-jar-with-auto-modules.jar`
 
 ## Command Line Arguments
 | Command | Description |
 | --- | --- |
-| `-input` | Target file path to obfuscate. |
-| `-output` | Output path. |
-| `-config` | Configuration path. |
-| `-noupdate` | Disable update warnings. |
-| `-console` | Application will run without GUI and obfuscation task will start immediately. |
+| `-input` | Target JAR file path to obfuscate. |
+| `-output` | Output path for obfuscated JAR. |
+| `-config` | JSON configuration file path. |
+| `-noupdate` | Disable update version warnings. |
+| `-console` | Run without GUI, start obfuscation immediately. |
+| `-init` | Generate template configuration file in current directory. |
+
+## Command Line Mode (No GUI)
+
+BozarXD can run in pure command line mode without JavaFX, useful for headless environments or Termux:
+
+**1. Generate template configuration:**
+```bash
+java -jar BozarXD-1.7.0-jar-with-auto-modules.jar -init
+```
+
+**2. Edit the generated `bozarConfig.json` file according to your needs**
+
+**3. Run obfuscation using the config:**
+```bash
+java -jar BozarXD-1.7.0-jar-with-auto-modules.jar -config bozarConfig.json -console
+```
+
+**Alternatively, specify parameters directly:**
+```bash
+java -jar BozarXD-1.7.0-jar-with-auto-modules.jar -input input.jar -output output.jar -console
+```
+
+**Note:** If JavaFX is not available, the application will automatically display CLI mode instructions.
 
 ## Exclusion/Inclusion Syntax
 

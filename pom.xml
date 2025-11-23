@@ -8,7 +8,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javaVersion>21</javaVersion>
         <maven.compiler.release>${javaVersion}</maven.compiler.release>
-        <mainClass>cn.jeyor1337.bozarxd.ui.App</mainClass>
+        <mainClass>cn.jeyor1337.bozarxd.Main</mainClass>
     </properties>
 
     <build>

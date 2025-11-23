@@ -157,4 +157,145 @@ public class ConfigManager {
         if(f.exists() && f.isFile())
             this.loadConfig(f);
     }
+
+    /**
+     * Load configuration from file without a Controller instance (for CLI mode)
+     */
+    public static BozarConfig loadConfigStatic(File file) throws IOException {
+        String str = Files.readString(file.toPath());
+
+        // Deserializer for input/output file
+        JsonDeserializer<BozarConfig> deserializer = (jsonElement, type, jsonDeserializationContext) -> {
+            try {
+                BozarConfig bozarConfig = new Gson().fromJson(jsonElement, BozarConfig.class);
+                var reflect = new Reflection<>(bozarConfig);
+                reflect.setDeclaredField("input", new File(((JsonObject)jsonElement).get("input").getAsString()));
+                reflect.setDeclaredField("output", Path.of(((JsonObject)jsonElement).get("output").getAsString()));
+                return bozarConfig;
+            } catch (JsonSyntaxException e) {
+                e.printStackTrace();
+                return null;
+            }
+        };
+
+        // Load config
+        BozarConfig bozarConfig = new GsonBuilder()
+                .registerTypeAdapter(BozarConfig.class, deserializer)
+                .create()
+                .fromJson(str, BozarConfig.class);
+
+        if(bozarConfig == null) {
+            throw new IOException("Failed to parse config file: " + file.getName());
+        }
+
+        return bozarConfig;
+    }
+
+    /**
+     * Create a default configuration with minimal settings (for CLI mode)
+     */
+    public static BozarConfig createDefaultConfig(String inputPath, String outputPath) {
+        // Create default watermark options (all disabled)
+        BozarConfig.BozarOptions.WatermarkOptions watermarkOptions = new BozarConfig.BozarOptions.WatermarkOptions(
+                false,  // dummyClass
+                false,  // textInsideClass
+                false,  // ldcPop
+                false,  // zipComment
+                false,  // badAnno
+                "",     // dummyClassText
+                "",     // textInsideClassText
+                "",     // ldcPopText
+                "",     // zipCommentText
+                ""      // badAnnoText
+        );
+
+        // Create default obfuscation options
+        BozarConfig.BozarOptions bozarOptions = new BozarConfig.BozarOptions(
+                BozarConfig.BozarOptions.RenameOption.ALPHABET,  // rename
+                BozarConfig.BozarOptions.LineNumberOption.DELETE,  // lineNumbers
+                BozarConfig.BozarOptions.LocalVariableOption.DELETE,  // localVariables
+                true,   // removeSourceFile
+                true,   // shuffle
+                true,   // removeInnerClasses
+                BozarConfig.BozarOptions.ControlFlowObfuscationOption.LIGHT,  // controlFlowObfuscation
+                false,  // crasher
+                BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,  // constantObfuscation
+                false,  // antiPrompt
+                false,  // invokeDynamic
+                watermarkOptions
+        );
+
+        return new BozarConfig(
+                inputPath,
+                outputPath,
+                "",
+                java.util.List.of(),
+                bozarOptions
+        );
+    }
+
+    /**
+     * Generate a template configuration file with default settings
+     * This is a static method so it can be called without a Controller instance
+     */
+    public static void generateTemplateConfig() throws IOException {
+        // Create default watermark options
+        BozarConfig.BozarOptions.WatermarkOptions watermarkOptions = new BozarConfig.BozarOptions.WatermarkOptions(
+                false,  // dummyClass
+                false,  // textInsideClass
+                false,  // ldcPop
+                false,  // zipComment
+                false,  // badAnno
+                "BozarXD",  // dummyClassText
+                "Obfuscated by BozarXD",  // textInsideClassText
+                "BozarXD Watermark",  // ldcPopText
+                "Protected by BozarXD",  // zipCommentText
+                "BozarXD"  // badAnnoText
+        );
+
+        // Create default obfuscation options
+        BozarConfig.BozarOptions bozarOptions = new BozarConfig.BozarOptions(
+                BozarConfig.BozarOptions.RenameOption.ALPHABET,  // rename
+                BozarConfig.BozarOptions.LineNumberOption.DELETE,  // lineNumbers
+                BozarConfig.BozarOptions.LocalVariableOption.DELETE,  // localVariables
+                true,   // removeSourceFile
+                true,   // shuffle
+                true,   // removeInnerClasses
+                BozarConfig.BozarOptions.ControlFlowObfuscationOption.LIGHT,  // controlFlowObfuscation
+                false,  // crasher
+                BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,  // constantObfuscation
+                false,  // antiPrompt
+                false,  // invokeDynamic
+                watermarkOptions
+        );
+
+        // Create template config with example values
+        BozarConfig templateConfig = new BozarConfig(
+                "input.jar",
+                "output.jar",
+                "com.example.Main\ncom.example.keep.**",
+                java.util.List.of("libs/library1.jar", "libs/library2.jar"),
+                bozarOptions
+        );
+
+        // Serialize and save to file
+        try (FileWriter fw = new FileWriter("bozarConfig.json")) {
+            JsonSerializer<BozarConfig> serializer = (cfg, type, jsonSerializationContext) -> {
+                JsonObject jsonObject = new JsonObject();
+                jsonObject.add("input", new JsonPrimitive(cfg.getInput().getAbsolutePath()));
+                jsonObject.add("output", new JsonPrimitive(cfg.getOutput().toFile().getAbsolutePath()));
+                ((JsonObject) new Gson().toJsonTree(cfg))
+                        .entrySet().forEach(stringJsonElementEntry -> jsonObject.add(stringJsonElementEntry.getKey(), stringJsonElementEntry.getValue()));
+                return jsonObject;
+            };
+
+            fw.write(new GsonBuilder()
+                    .registerTypeAdapter(BozarConfig.class, serializer)
+                    .setPrettyPrinting()
+                    .create()
+                    .toJson(templateConfig)
+            );
+            fw.flush();
+        }
+    }
 }

@@ -14,7 +14,6 @@
             <excludes>
                 <exclude>org.openjfx:*</exclude>
                 <exclude>org.ow2.asm:*</exclude>
-                <exclude>com.google.code.gson:gson</exclude>
             </excludes>
         </dependencySet>
     </dependencySets>
