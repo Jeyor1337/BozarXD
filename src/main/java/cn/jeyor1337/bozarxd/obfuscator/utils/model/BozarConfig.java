@@ -82,10 +82,12 @@ public class BozarConfig {
             private final boolean textInsideClass;
             private final boolean ldcPop;
             private final boolean zipComment;
+            private final boolean badAnno;
             private final String dummyClassText;
             private final String textInsideClassText;
             private final String ldcPopText;
             private final String zipCommentText;
+            private final String badAnnoText;
         }
     }
 

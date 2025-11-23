@@ -7,6 +7,7 @@ import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.DummyClassTran
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.TextInsideClassTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.UnusedStringTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.ZipCommentTransformer;
+import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.BadAnnoTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.utils.BozarUtils;
 import cn.jeyor1337.bozarxd.obfuscator.utils.Reflection;
 import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarConfig;
@@ -79,11 +80,13 @@ public class ConfigManager {
         c.getCheckBox(TextInsideClassTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isTextInsideClass());
         c.getCheckBox(UnusedStringTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isLdcPop());
         c.getCheckBox(ZipCommentTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isZipComment());
+        c.getCheckBox(BadAnnoTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isBadAnno());
 
         c.getTextInputControl(DummyClassTransformer.class).setText(bozarConfig.getOptions().getWatermarkOptions().getDummyClassText());
         c.getTextInputControl(TextInsideClassTransformer.class).setText(bozarConfig.getOptions().getWatermarkOptions().getTextInsideClassText());
         c.getTextInputControl(UnusedStringTransformer.class).setText(bozarConfig.getOptions().getWatermarkOptions().getLdcPopText());
         c.getTextInputControl(ZipCommentTransformer.class).setText(bozarConfig.getOptions().getWatermarkOptions().getZipCommentText());
+        c.getTextInputControl(BadAnnoTransformer.class).setText(bozarConfig.getOptions().getWatermarkOptions().getBadAnnoText());
     }
 
     public void saveConfig(BozarConfig bozarConfig) throws IOException {
@@ -117,10 +120,12 @@ public class ConfigManager {
                 c.getCheckBox(TextInsideClassTransformer.class).isSelected(),
                 c.getCheckBox(UnusedStringTransformer.class).isSelected(),
                 c.getCheckBox(ZipCommentTransformer.class).isSelected(),
+                c.getCheckBox(BadAnnoTransformer.class).isSelected(),
                 c.getTextInputControl(DummyClassTransformer.class).getText(),
                 c.getTextInputControl(TextInsideClassTransformer.class).getText(),
                 c.getTextInputControl(UnusedStringTransformer.class).getText(),
-                c.getTextInputControl(ZipCommentTransformer.class).getText()
+                c.getTextInputControl(ZipCommentTransformer.class).getText(),
+                c.getTextInputControl(BadAnnoTransformer.class).getText()
         );
         BozarConfig.BozarOptions bozarOptions = new BozarConfig.BozarOptions(
                 (BozarConfig.BozarOptions.RenameOption) c.getEnum(ClassRenamerTransformer.class),

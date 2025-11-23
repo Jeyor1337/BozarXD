@@ -58,6 +58,7 @@ public class TransformManager {
         transformers.add(TextInsideClassTransformer.class);
         transformers.add(UnusedStringTransformer.class);
         transformers.add(ZipCommentTransformer.class);
+        transformers.add(BadAnnoTransformer.class);
         transformers.add(CrasherTransformer.class);
         transformers.add(ShuffleTransformer.class);
         transformers.add(InnerClassTransformer.class);
