@@ -10,7 +10,9 @@
 Let me know if obfuscator fails. Submit an [issue](https://github.com/Jeyor1337/BozarXD/issues) here.
 
 ## Currently Available Options
-* Watermark
+* AntiPrompt(AntiAi rename & deobf)
+* InvokeDynamic(Greatness needs no words.)
+* Watermark & Bad Annotation(Some decompilers can be crashed idk why.)
 * Renamer
 * Shuffler
 * Decompiler crasher
