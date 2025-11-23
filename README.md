@@ -1,6 +1,6 @@
 # BozarXD - Java Bytecode Obfuscator with GUI
 
-![alt text](https://i.imgur.com/EhWRCRB.png)
+![alt text](https://i.imgur.com/EhWRCRB.jpg)
 
 ## Usage
 * Download the version you want in [releases](https://github.com/Jeyor1337/BozarXD/releases) for your platform
