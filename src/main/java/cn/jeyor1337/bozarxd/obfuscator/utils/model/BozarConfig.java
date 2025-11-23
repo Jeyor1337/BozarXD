@@ -58,7 +58,8 @@ public class BozarConfig {
         public enum ConstantObfuscationOption {
             @SerializedName("Off") OFF,
             @SerializedName("Light") LIGHT,
-            @SerializedName("Flow") FLOW
+            @SerializedName("Flow") FLOW,
+            @SerializedName("Skidobf") SKIDOBF
         }
 
         // Obfuscation options
