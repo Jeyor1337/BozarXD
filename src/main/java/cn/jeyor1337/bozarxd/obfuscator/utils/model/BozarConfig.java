@@ -62,6 +62,13 @@ public class BozarConfig {
             @SerializedName("Skidobf") SKIDOBF
         }
 
+        public enum ParamObfuscationOption {
+            @SerializedName("Off") OFF,
+            @SerializedName("Conservative") CONSERVATIVE,
+            @SerializedName("Moderate") MODERATE,
+            @SerializedName("Aggressive") AGGRESSIVE
+        }
+
         // Obfuscation options
         private final RenameOption rename;
         private final LineNumberOption lineNumbers;
@@ -74,6 +81,7 @@ public class BozarConfig {
         private final ConstantObfuscationOption constantObfuscation;
         private final boolean antiPrompt;
         private final boolean invokeDynamic;
+        private final ParamObfuscationOption paramObfuscation;
         private final WatermarkOptions watermarkOptions;
 
         @Getter

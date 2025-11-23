@@ -139,6 +139,7 @@ public class ConfigManager {
                 (BozarConfig.BozarOptions.ConstantObfuscationOption) c.getEnum(ConstantTransformer.class),
                 c.getCheckBox(AntiPromptTransformer.class).isSelected(),
                 c.getCheckBox(InvokeDynamicTransformer.class).isSelected(),
+                (BozarConfig.BozarOptions.ParamObfuscationOption) c.getEnum(ParamObfTransformer.class),
                 watermarkOptions
         );
         BozarConfig bozarConfig = new BozarConfig(c.input.getText(), c.output.getText(), c.exclude.getText(), this.controller.libraries.getItems(), bozarOptions);
@@ -222,6 +223,7 @@ public class ConfigManager {
                 BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,  // constantObfuscation
                 false,  // antiPrompt
                 false,  // invokeDynamic
+                BozarConfig.BozarOptions.ParamObfuscationOption.OFF,  // paramObfuscation
                 watermarkOptions
         );
 
@@ -266,6 +268,7 @@ public class ConfigManager {
                 BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,  // constantObfuscation
                 false,  // antiPrompt
                 false,  // invokeDynamic
+                BozarConfig.BozarOptions.ParamObfuscationOption.CONSERVATIVE,  // paramObfuscation (Conservative as default in template)
                 watermarkOptions
         );
 

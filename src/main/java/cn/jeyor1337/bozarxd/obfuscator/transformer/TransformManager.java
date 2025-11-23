@@ -64,6 +64,7 @@ public class TransformManager {
         transformers.add(InnerClassTransformer.class);
         transformers.add(AntiPromptTransformer.class);
         transformers.add(InvokeDynamicTransformer.class);
+        transformers.add(ParamObfTransformer.class);
 
         return transformers;
     }
