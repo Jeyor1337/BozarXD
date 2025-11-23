@@ -71,6 +71,8 @@ public class BozarConfig {
         private final ControlFlowObfuscationOption controlFlowObfuscation;
         private final boolean crasher;
         private final ConstantObfuscationOption constantObfuscation;
+        private final boolean antiPrompt;
+        private final boolean invokeDynamic;
         private final WatermarkOptions watermarkOptions;
 
         @Getter

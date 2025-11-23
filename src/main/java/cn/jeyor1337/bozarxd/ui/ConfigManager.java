@@ -71,6 +71,8 @@ public class ConfigManager {
         c.getComboBox(LightControlFlowTransformer.class).getSelectionModel().select(BozarUtils.getSerializedName(bozarConfig.getOptions().getControlFlowObfuscation()));
         c.getCheckBox(CrasherTransformer.class).setSelected(bozarConfig.getOptions().isCrasher());
         c.getComboBox(ConstantTransformer.class).getSelectionModel().select(BozarUtils.getSerializedName(bozarConfig.getOptions().getConstantObfuscation()));
+        c.getCheckBox(AntiPromptTransformer.class).setSelected(bozarConfig.getOptions().isAntiPrompt());
+        c.getCheckBox(InvokeDynamicTransformer.class).setSelected(bozarConfig.getOptions().isInvokeDynamic());
 
         // Watermark options
         c.getCheckBox(DummyClassTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isDummyClass());
@@ -130,6 +132,8 @@ public class ConfigManager {
                 (BozarConfig.BozarOptions.ControlFlowObfuscationOption) c.getEnum(LightControlFlowTransformer.class),
                 c.getCheckBox(CrasherTransformer.class).isSelected(),
                 (BozarConfig.BozarOptions.ConstantObfuscationOption) c.getEnum(ConstantTransformer.class),
+                c.getCheckBox(AntiPromptTransformer.class).isSelected(),
+                c.getCheckBox(InvokeDynamicTransformer.class).isSelected(),
                 watermarkOptions
         );
         BozarConfig bozarConfig = new BozarConfig(c.input.getText(), c.output.getText(), c.exclude.getText(), this.controller.libraries.getItems(), bozarOptions);

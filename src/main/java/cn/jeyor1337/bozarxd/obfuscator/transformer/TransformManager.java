@@ -61,6 +61,8 @@ public class TransformManager {
         transformers.add(CrasherTransformer.class);
         transformers.add(ShuffleTransformer.class);
         transformers.add(InnerClassTransformer.class);
+        transformers.add(AntiPromptTransformer.class);
+        transformers.add(InvokeDynamicTransformer.class);
 
         return transformers;
     }
