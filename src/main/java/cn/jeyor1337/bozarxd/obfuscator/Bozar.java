@@ -25,6 +25,7 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -191,25 +192,41 @@ public class Bozar implements Runnable {
     public boolean isExcluded(ClassTransformer classTransformer, final String str) {
         final String s = (str.contains("$")) ? str.substring(0, str.indexOf("$")) : str;
 
-        // Check if whitelist mode (any line starts with !)
-        boolean isWhitelistMode = this.getConfig().getExclude().lines()
-                .anyMatch(line -> line.trim().startsWith("!"));
+        // Collect all matching rules with their specificity
+        List<MatchResult> matches = new ArrayList<>();
 
-        if (isWhitelistMode) {
-            // Whitelist mode: exclude everything except items marked with !
-            boolean isIncluded = this.getConfig().getExclude().lines()
-                    .filter(line -> line.trim().startsWith("!"))
-                    .anyMatch(line -> matchesPattern(classTransformer, s, line.trim().substring(1)));
-            return !isIncluded; // Return true (excluded) if NOT included in whitelist
-        } else {
-            // Blacklist mode: include everything except items in the list
-            return this.getConfig().getExclude().lines()
-                    .filter(line -> !line.trim().isEmpty())
-                    .anyMatch(line -> matchesPattern(classTransformer, s, line.trim()));
+        for (String line : this.getConfig().getExclude().lines().toList()) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+
+            boolean isInclude = line.startsWith("!");
+            String pattern = isInclude ? line.substring(1) : line;
+
+            int specificity = calculateSpecificity(classTransformer, s, pattern);
+            if (specificity > 0) {
+                matches.add(new MatchResult(isInclude, specificity));
+            }
         }
+
+        // If no matches, use default behavior
+        if (matches.isEmpty()) {
+            // Check if any include rules exist
+            boolean hasIncludeRules = this.getConfig().getExclude().lines()
+                    .anyMatch(line -> line.trim().startsWith("!"));
+            // If include rules exist, default is excluded; otherwise, default is included
+            return hasIncludeRules;
+        }
+
+        // Find the most specific match
+        MatchResult mostSpecific = matches.stream()
+                .max(Comparator.comparingInt(m -> m.specificity))
+                .orElseThrow();
+
+        // Return true (excluded) if the most specific rule is NOT an include rule
+        return !mostSpecific.isInclude;
     }
 
-    private boolean matchesPattern(ClassTransformer classTransformer, final String s, String line) {
+    private int calculateSpecificity(ClassTransformer classTransformer, final String s, String line) {
         // Detect target transformer
         String targetTransformer = null;
         if(line.contains(":")) {
@@ -217,18 +234,61 @@ public class Bozar implements Runnable {
             line = line.substring((targetTransformer + ":").length());
         }
 
-        if(targetTransformer != null && classTransformer == null) return false;
-        if(targetTransformer != null && !classTransformer.getName().equals(targetTransformer)) return false;
+        // Check transformer match
+        if(targetTransformer != null && classTransformer == null) return 0;
+        if(targetTransformer != null && !classTransformer.getName().equals(targetTransformer)) return 0;
 
-        if(line.startsWith("**")) return s.endsWith(line.substring(2));
-        else if(line.startsWith("*")) return s.endsWith(line.substring(1));
+        // Calculate base specificity score based on pattern type
+        int baseScore = 0;
+        boolean matches = false;
 
-        if(line.endsWith("**"))
-            return s.startsWith(line.substring(0, line.length() - 2));
-        else if(line.endsWith("*"))
-            return s.startsWith(line.substring(0, line.length() - 1))
-                && s.chars().filter(ch -> ch == '.').count() == line.chars().filter(ch -> ch == '.').count();
-        else return line.equals(s);
+        if(line.startsWith("**")) {
+            // Suffix wildcard: lowest priority
+            matches = s.endsWith(line.substring(2));
+            baseScore = 100;
+        } else if(line.startsWith("*")) {
+            // Suffix wildcard
+            matches = s.endsWith(line.substring(1));
+            baseScore = 200;
+        } else if(line.endsWith("**")) {
+            // Prefix multi-level wildcard
+            matches = s.startsWith(line.substring(0, line.length() - 2));
+            baseScore = 300;
+        } else if(line.endsWith("*")) {
+            // Prefix single-level wildcard
+            matches = s.startsWith(line.substring(0, line.length() - 1))
+                    && s.chars().filter(ch -> ch == '.').count() == line.chars().filter(ch -> ch == '.').count();
+            baseScore = 400;
+        } else {
+            // Exact match: highest priority
+            matches = line.equals(s);
+            baseScore = 500;
+        }
+
+        if (!matches) return 0;
+
+        // Add pattern length to score for more specific patterns
+        // Longer patterns are more specific
+        int lengthScore = line.replace("*", "").length();
+
+        // Transformer-specific rules get bonus points
+        int transformerBonus = targetTransformer != null ? 1000 : 0;
+
+        return transformerBonus + baseScore + lengthScore;
+    }
+
+    private boolean matchesPattern(ClassTransformer classTransformer, final String s, String line) {
+        return calculateSpecificity(classTransformer, s, line) > 0;
+    }
+
+    private static class MatchResult {
+        final boolean isInclude;
+        final int specificity;
+
+        MatchResult(boolean isInclude, int specificity) {
+            this.isInclude = isInclude;
+            this.specificity = specificity;
+        }
     }
 
     public void log(String format, Object... args) {
