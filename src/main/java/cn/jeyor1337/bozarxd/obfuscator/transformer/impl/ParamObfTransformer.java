@@ -104,6 +104,12 @@ public class ParamObfTransformer extends ClassTransformer {
             return false;
         }
 
+        // Skip synthetic and bridge methods (includes lambdas and compiler-generated methods)
+        if ((methodNode.access & ACC_SYNTHETIC) != 0 ||
+            (methodNode.access & ACC_BRIDGE) != 0) {
+            return false;
+        }
+
         // Skip main method
         if (methodNode.name.equals("main") && methodNode.desc.equals("([Ljava/lang/String;)V")) {
             return false;
@@ -123,19 +129,19 @@ public class ParamObfTransformer extends ClassTransformer {
                 return false;
 
             case CONSERVATIVE:
-                // Only private methods (instance or static)
-                // Safest: all call sites guaranteed to be in the same class
-                return isPrivate;
+                // Only private static methods
+                // Safest: avoids reflection issues with private instance methods
+                return isPrivate && isStatic;
 
             case MODERATE:
-                // Private methods + package-private static methods
-                // Relatively safe: package-private static calls are within the same package
-                return isPrivate || (isStatic && isPackagePrivate);
+                // Private static methods + package-private static methods
+                // Avoids reflection issues with private instance methods
+                return (isPrivate && isStatic) || (isStatic && isPackagePrivate);
 
             case AGGRESSIVE:
-                // All static methods (including public static)
-                // Warning: may break external API calls, reflection, JNI
-                return isPrivate || isStatic;
+                // Private static methods + all other static methods
+                // Avoids reflection issues with private instance methods, but may break external API calls
+                return isStatic;
 
             default:
                 return false;
