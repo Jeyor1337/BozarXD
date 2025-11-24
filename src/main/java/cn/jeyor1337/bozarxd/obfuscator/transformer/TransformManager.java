@@ -50,6 +50,7 @@ public class TransformManager {
         // TODO: AntiDebugTransformer
         transformers.add(LightControlFlowTransformer.class);
         transformers.add(HeavyControlFlowTransformer.class);
+        transformers.add(SuperControlFlowTransformer.class);
         transformers.add(ConstantTransformer.class);
         transformers.add(LocalVariableTransformer.class);
         transformers.add(LineNumberTransformer.class);

@@ -76,7 +76,7 @@ public class ConstantTransformer extends ClassTransformer {
                                 }
                             }
                         }
-                        case 2 -> { // Skidobf-style: Multi-layer XOR with arithmetic
+                        case 2 -> {
                             // Generate multiple random keys for layered obfuscation
                             int xor1 = random.nextInt(Short.MAX_VALUE) + 1;
                             int xor2 = random.nextInt(Short.MAX_VALUE) + 1;
@@ -216,7 +216,6 @@ public class ConstantTransformer extends ClassTransformer {
     }
 
     private InsnList convertString(MethodNode methodNode, String str) {
-        // Use skidobf-style XOR encryption when in SKIDOBF mode
         if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SKIDOBF) {
             return convertStringSkidobf(methodNode, str);
         }
@@ -258,7 +257,6 @@ public class ConstantTransformer extends ClassTransformer {
     }
 
     private InsnList convertStringSkidobf(MethodNode methodNode, String str) {
-        // Skidobf-style XOR encryption with random keys
         final InsnList insnList = new InsnList();
         final int varIndex = methodNode.maxLocals + 1;
         final int keyIndex = methodNode.maxLocals + 2;

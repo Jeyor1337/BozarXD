@@ -52,7 +52,8 @@ public class BozarConfig {
         public enum ControlFlowObfuscationOption {
             @SerializedName("Off") OFF,
             @SerializedName("Light") LIGHT,
-            @SerializedName("Heavy") HEAVY
+            @SerializedName("Heavy") HEAVY,
+            @SerializedName("Super") SUPER
         }
 
         public enum ConstantObfuscationOption {
