@@ -271,4 +271,68 @@ public class ASMUtils implements Opcodes {
             default -> throw ex;
         };
     }
+
+    // Float support
+    public static AbstractInsnNode pushFloat(float value) {
+        if (value == 0.0f) return new InsnNode(FCONST_0);
+        else if (value == 1.0f) return new InsnNode(FCONST_1);
+        else if (value == 2.0f) return new InsnNode(FCONST_2);
+        else return new LdcInsnNode(value);
+    }
+
+    public static boolean isPushFloat(AbstractInsnNode insn) {
+        try {
+            getPushedFloat(insn);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public static float getPushedFloat(AbstractInsnNode insn) throws IllegalArgumentException {
+        var ex = new IllegalArgumentException("Insn is not a push float instruction");
+        return switch (insn.getOpcode()) {
+            case FCONST_0 -> 0.0f;
+            case FCONST_1 -> 1.0f;
+            case FCONST_2 -> 2.0f;
+            case LDC -> {
+                Object cst = ((LdcInsnNode)insn).cst;
+                if (cst instanceof Float)
+                    yield (float) cst;
+                throw ex;
+            }
+            default -> throw ex;
+        };
+    }
+
+    // Double support
+    public static AbstractInsnNode pushDouble(double value) {
+        if (value == 0.0d) return new InsnNode(DCONST_0);
+        else if (value == 1.0d) return new InsnNode(DCONST_1);
+        else return new LdcInsnNode(value);
+    }
+
+    public static boolean isPushDouble(AbstractInsnNode insn) {
+        try {
+            getPushedDouble(insn);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public static double getPushedDouble(AbstractInsnNode insn) throws IllegalArgumentException {
+        var ex = new IllegalArgumentException("Insn is not a push double instruction");
+        return switch (insn.getOpcode()) {
+            case DCONST_0 -> 0.0d;
+            case DCONST_1 -> 1.0d;
+            case LDC -> {
+                Object cst = ((LdcInsnNode)insn).cst;
+                if (cst instanceof Double)
+                    yield (double) cst;
+                throw ex;
+            }
+            default -> throw ex;
+        };
+    }
 }

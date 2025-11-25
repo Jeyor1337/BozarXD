@@ -39,9 +39,10 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     private int methodCounter = 0;
 
     // Obfuscation intensity (higher = more aggressive)
-    private static final int JUMP_CHAIN_MAX_LENGTH = 3;
     private static final double BOGUS_JUMP_PROBABILITY = 0.3;
-    private static final double JUMP_CHAIN_PROBABILITY = 0.25;
+    // TableSwitch trap configuration (from GotoObfuscator)
+    private static final int TRAP_LABELS_MIN = 5;
+    private static final int TRAP_LABELS_MAX = 10;
 
     @Override
     public void transformClass(ClassNode classNode) {
@@ -73,8 +74,8 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         // 1. Exception-based range transformation to GOTO instructions
         applyRangeTransformation(classNode, methodNode);
 
-        // 2. Jump chaining - split single jumps into chains
-        applyJumpChaining(methodNode);
+        // 2. TableSwitch trap obfuscation (from GotoObfuscator) - replaces jump chaining
+        applyTableSwitchObfuscation(methodNode);
 
         // 3. Bogus conditional jumps - add fake branches
         applyBogusConditionalJumps(methodNode);
@@ -263,51 +264,122 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     }
 
     /**
-     * Jump Chaining - Transform single jumps into chains of indirect jumps
-     * Example: GOTO A -> GOTO B -> GOTO C -> GOTO A
-     * This makes static analysis harder by adding indirection layers
+     * TableSwitch Trap Obfuscation (from GotoObfuscator FlowObfuscation)
+     *
+     * For each conditional jump instruction, inserts a tableswitch with trap labels.
+     * The correct case jumps to the original next instruction, while trap cases
+     * contain dead code that never executes.
+     *
+     * This replaces the original jump chaining technique with a more sophisticated
+     * approach that creates complex control flow graphs.
      */
-    private void applyJumpChaining(MethodNode methodNode) {
+    private void applyTableSwitchObfuscation(MethodNode methodNode) {
         if(methodNode.instructions.size() > 3000) return; // Skip large methods
 
+        // Collect all conditional jump instructions (skip GOTO and JSR)
         List<JumpInsnNode> conditionalJumps = Arrays.stream(methodNode.instructions.toArray())
             .filter(insn -> insn instanceof JumpInsnNode)
             .map(insn -> (JumpInsnNode)insn)
-            .filter(jump -> jump.getOpcode() >= IFEQ && jump.getOpcode() <= IF_ACMPNE) // Conditional jumps only
-            .filter(jump -> !isLoopBackEdge(methodNode, jump))
+            .filter(jump -> {
+                int op = jump.getOpcode();
+                // Include all conditional jumps (IFEQ-IF_ACMPNE, IFNULL, IFNONNULL)
+                // Skip GOTO and JSR as per GotoObfuscator design
+                return (op >= IFEQ && op <= IF_ACMPNE) || op == IFNULL || op == IFNONNULL;
+            })
+            // Note: Not skipping backward jumps per user decision (more aggressive)
             .collect(Collectors.toList());
 
         for(JumpInsnNode jump : conditionalJumps) {
-            if(ThreadLocalRandom.current().nextDouble() > JUMP_CHAIN_PROBABILITY) continue;
-
-            LabelNode originalTarget = jump.label;
-            LabelNode currentLabel = originalTarget;
-
-            // Create a chain of 2-3 intermediate jumps
-            int chainLength = ThreadLocalRandom.current().nextInt(JUMP_CHAIN_MAX_LENGTH - 1) + 2;
-
-            // Build chain in reverse order
-            for(int i = 0; i < chainLength; i++) {
-                LabelNode intermediateLabel = new LabelNode();
-                InsnList chain = new InsnList();
-                chain.add(intermediateLabel);
-
-                // Add some neutral stack operations to confuse decompilers
-                if(ThreadLocalRandom.current().nextBoolean()) {
-                    chain.add(new InsnNode(ICONST_0));
-                    chain.add(new InsnNode(POP));
-                }
-
-                chain.add(new JumpInsnNode(GOTO, currentLabel));
-
-                // Insert chain before original target
-                methodNode.instructions.insertBefore(originalTarget, chain);
-                currentLabel = intermediateLabel;
-            }
-
-            // Update original jump to point to first intermediate
-            jump.label = currentLabel;
+            transformConditionalJumpWithTableSwitch(methodNode, jump);
         }
+    }
+
+    /**
+     * Transform a conditional jump by inserting a tableswitch with trap labels.
+     *
+     * Original: IF_XX -> target
+     *           nextInsn
+     *
+     * After:    IF_XX -> target
+     *           push(insertPosition)
+     *           tableswitch(0..trapCount-1, default=trap[insertPosition]) {
+     *               case insertPosition: goto nextLabel
+     *               case other: goto trap[other]
+     *           }
+     *           trap[0]: dead_code; ifeq(target); goto(random_trap)
+     *           trap[1]: dead_code; ifeq(target); goto(random_trap)
+     *           ...
+     *           nextLabel: (original next instruction)
+     */
+    private void transformConditionalJumpWithTableSwitch(MethodNode methodNode, JumpInsnNode jump) {
+        AbstractInsnNode nextInsn = jump.getNext();
+        if(nextInsn == null) return;
+
+        // Determine nextLabel - use existing if it's a LabelNode, create new otherwise
+        LabelNode nextLabel;
+        boolean needInsertNextLabel;
+        if(nextInsn instanceof LabelNode) {
+            nextLabel = (LabelNode) nextInsn;
+            needInsertNextLabel = false;
+        } else {
+            nextLabel = new LabelNode();
+            needInsertNextLabel = true;
+        }
+
+        // Create trap labels (5-10 random)
+        int trapCount = ThreadLocalRandom.current().nextInt(TRAP_LABELS_MIN, TRAP_LABELS_MAX + 1);
+        LabelNode[] trapLabels = new LabelNode[trapCount];
+        for(int i = 0; i < trapCount; i++) {
+            trapLabels[i] = new LabelNode();
+        }
+
+        // Choose random position for the correct case
+        int insertPosition = ThreadLocalRandom.current().nextInt(trapCount);
+
+        // Build tableswitch labels array - correct position goes to nextLabel, others to trap
+        LabelNode[] switchLabels = new LabelNode[trapCount];
+        for(int i = 0; i < trapCount; i++) {
+            switchLabels[i] = (i == insertPosition) ? nextLabel : trapLabels[i];
+        }
+
+        // Default case goes to trap at insertPosition (dead code path)
+        LabelNode defaultLabel = trapLabels[insertPosition];
+
+        // Build the instruction list to insert after the jump
+        InsnList insertList = new InsnList();
+
+        // Push the correct index onto stack
+        insertList.add(ASMUtils.pushInt(insertPosition));
+
+        // Add tableswitch
+        insertList.add(new TableSwitchInsnNode(0, trapCount - 1, defaultLabel, switchLabels));
+
+        // Add trap label blocks with dead code
+        for(int i = 0; i < trapCount; i++) {
+            insertList.add(trapLabels[i]);
+
+            // Dead code block (never executed) - using ATHROW style per user decision
+            // Pattern: ACONST_NULL, POP (neutral op), then conditional jump back to original target
+            insertList.add(new InsnNode(ACONST_NULL));
+            insertList.add(new InsnNode(POP));
+
+            // Add opaque false predicate that jumps to original target (never taken)
+            // Using (0 == 0) which is always true, so IFNE never jumps
+            insertList.add(new InsnNode(ICONST_0));
+            insertList.add(new JumpInsnNode(IFEQ, jump.label)); // Jump to original target if 0==0 (always)
+
+            // If somehow reached (impossible), throw null
+            insertList.add(new InsnNode(ACONST_NULL));
+            insertList.add(new InsnNode(ATHROW));
+        }
+
+        // Add nextLabel if we created a new one
+        if(needInsertNextLabel) {
+            insertList.add(nextLabel);
+        }
+
+        // Insert the entire block after the conditional jump
+        methodNode.instructions.insert(jump, insertList);
     }
 
     /**
