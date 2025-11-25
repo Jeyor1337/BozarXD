@@ -34,7 +34,7 @@ public class ConstantTransformer extends ClassTransformer {
                     final ValueType valueType = this.getValueType(insn);
 
                     // Randomly selected number obfuscation type
-                    int type = this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SKIDOBF
+                    int type = this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SUPER
                             ? 2 : random.nextInt(2);
 
                     switch (valueType) {
@@ -215,8 +215,8 @@ public class ConstantTransformer extends ClassTransformer {
 
     @Override
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
-        if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SKIDOBF) {
-            // SKIDOBF mode: collect strings for decrypt method architecture
+        if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SUPER) {
+            // SUPER mode: collect strings for decrypt method architecture
             StringEncryptionContext ctx = classContexts.computeIfAbsent(classNode.name,
                 k -> new StringEncryptionContext(classNode));
 
@@ -268,8 +268,8 @@ public class ConstantTransformer extends ClassTransformer {
 
     @Override
     public void post() {
-        // Generate decrypt methods and initialize encrypted string arrays for SKIDOBF mode
-        if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SKIDOBF) {
+        // Generate decrypt methods and initialize encrypted string arrays for SUPER mode
+        if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SUPER) {
             for (StringEncryptionContext ctx : classContexts.values()) {
                 if (ctx.strings.isEmpty()) continue;
 
@@ -569,7 +569,7 @@ public class ConstantTransformer extends ClassTransformer {
     @Override
     public BozarConfig.EnableType getEnableType() {
         return new BozarConfig.EnableType(() -> ((List<?>) this.getEnableType().type()).contains(this.getBozar().getConfig().getOptions().getConstantObfuscation()),
-                List.of(BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT, BozarConfig.BozarOptions.ConstantObfuscationOption.FLOW, BozarConfig.BozarOptions.ConstantObfuscationOption.SKIDOBF));
+                List.of(BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT, BozarConfig.BozarOptions.ConstantObfuscationOption.FLOW, BozarConfig.BozarOptions.ConstantObfuscationOption.SUPER));
     }
 
     // Inner class for per-class string encryption context

@@ -60,14 +60,14 @@ public class BozarConfig {
             @SerializedName("Off") OFF,
             @SerializedName("Light") LIGHT,
             @SerializedName("Flow") FLOW,
-            @SerializedName("Skidobf") SKIDOBF
+            @SerializedName("Super") SUPER
         }
 
         public enum ParamObfuscationOption {
             @SerializedName("Off") OFF,
-            @SerializedName("Conservative") CONSERVATIVE,
-            @SerializedName("Moderate") MODERATE,
-            @SerializedName("Aggressive") AGGRESSIVE
+            @SerializedName("Light") LIGHT,
+            @SerializedName("Basic") BASIC,
+            @SerializedName("Heavy") HEAVY
         }
 
         // Obfuscation options

@@ -268,7 +268,7 @@ public class ConfigManager {
                 BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,  // constantObfuscation
                 false,  // antiPrompt
                 false,  // invokeDynamic
-                BozarConfig.BozarOptions.ParamObfuscationOption.CONSERVATIVE,  // paramObfuscation (Conservative as default in template)
+                BozarConfig.BozarOptions.ParamObfuscationOption.LIGHT,  // paramObfuscation (Light as default in template)
                 watermarkOptions
         );
 

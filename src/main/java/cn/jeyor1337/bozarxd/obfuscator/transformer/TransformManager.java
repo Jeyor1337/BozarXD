@@ -43,29 +43,43 @@ public class TransformManager {
     public static List<Class<? extends ClassTransformer>> getTransformers() {
         final var transformers = new ArrayList<Class<? extends ClassTransformer>>();
 
+        // Phase 1: Renaming (must be first - executed separately in transformAll)
         transformers.add(ClassRenamerTransformer.class);
         transformers.add(FieldRenamerTransformer.class);
         transformers.add(MethodRenamerTransformer.class);
 
-        // TODO: AntiDebugTransformer
-        transformers.add(LightControlFlowTransformer.class);
-        transformers.add(HeavyControlFlowTransformer.class);
-        transformers.add(SuperControlFlowTransformer.class);
-        transformers.add(ConstantTransformer.class);
+        // Phase 2: Information removal (pure metadata removal, no logic changes)
         transformers.add(LocalVariableTransformer.class);
         transformers.add(LineNumberTransformer.class);
         transformers.add(SourceFileTransformer.class);
+
+        // Phase 3: Structure adjustments (class structure modifications)
+        transformers.add(InnerClassTransformer.class);
+        transformers.add(ShuffleTransformer.class);
+        transformers.add(BadAnnoTransformer.class);
+
+        // Phase 4: Constant obfuscation (strings and numbers)
+        transformers.add(ConstantTransformer.class);
+
+        // Phase 5: Advanced transformations (method signature and call modifications)
+        transformers.add(AntiPromptTransformer.class);
+        transformers.add(ParamObfTransformer.class);      // CRITICAL: Must be before InvokeDynamic
+        transformers.add(InvokeDynamicTransformer.class); // CRITICAL: Must be after ParamObf
+
+        // Phase 6: Control flow obfuscation (maximize analysis difficulty)
+        // Applied late to maximize complexity after all other transformations
+        transformers.add(LightControlFlowTransformer.class);
+        transformers.add(HeavyControlFlowTransformer.class);
+        transformers.add(SuperControlFlowTransformer.class);
+
+        // Phase 7: Crashers and watermarks (final touches)
+        transformers.add(CrasherTransformer.class);
         transformers.add(DummyClassTransformer.class);
         transformers.add(TextInsideClassTransformer.class);
         transformers.add(UnusedStringTransformer.class);
         transformers.add(ZipCommentTransformer.class);
-        transformers.add(BadAnnoTransformer.class);
-        transformers.add(CrasherTransformer.class);
-        transformers.add(ShuffleTransformer.class);
-        transformers.add(InnerClassTransformer.class);
-        transformers.add(AntiPromptTransformer.class);
-        transformers.add(ParamObfTransformer.class);
-        transformers.add(InvokeDynamicTransformer.class);
+
+        // TODO: AntiDebugTransformer
 
         return transformers;
     }
