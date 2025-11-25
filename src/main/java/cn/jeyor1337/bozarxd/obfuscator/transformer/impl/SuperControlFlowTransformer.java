@@ -13,10 +13,10 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 /**
- * Super Control Flow Obfuscator - Inspired by Skidfuscator
+ * Super Control Flow Obfuscator
  *
  * Implements multiple pure-ASM control flow obfuscation techniques:
- * 1. Exception-based control flow (BasicRangeTransformer)
+ * 1. Exception-based control flow
  * 2. Opaque predicate guards
  * 3. Jump chaining (indirect jumps)
  * 4. Bogus conditional branches
@@ -40,7 +40,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
     // Obfuscation intensity (higher = more aggressive)
     private static final double BOGUS_JUMP_PROBABILITY = 0.3;
-    // TableSwitch trap configuration (from GotoObfuscator)
+    // TableSwitch trap configuration
     private static final int TRAP_LABELS_MIN = 5;
     private static final int TRAP_LABELS_MAX = 10;
 
@@ -74,7 +74,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         // 1. Exception-based range transformation to GOTO instructions
         applyRangeTransformation(classNode, methodNode);
 
-        // 2. TableSwitch trap obfuscation (from GotoObfuscator) - replaces jump chaining
+        // 2. TableSwitch trap obfuscation - replaces jump chaining
         applyTableSwitchObfuscation(methodNode);
 
         // 3. Bogus conditional jumps - add fake branches
@@ -130,7 +130,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     }
 
     /**
-     * Exception-based Range Transformation (from Skidfuscator's BasicRangeTransformer)
+     * Exception-based Range Transformation
      * Converts simple GOTO instructions into exception-based control flow
      * while preserving loop structures by skipping backward jumps
      */
@@ -264,7 +264,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     }
 
     /**
-     * TableSwitch Trap Obfuscation (from GotoObfuscator FlowObfuscation)
+     * TableSwitch Trap Obfuscation
      *
      * For each conditional jump instruction, inserts a tableswitch with trap labels.
      * The correct case jumps to the original next instruction, while trap cases
@@ -283,7 +283,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
             .filter(jump -> {
                 int op = jump.getOpcode();
                 // Include all conditional jumps (IFEQ-IF_ACMPNE, IFNULL, IFNONNULL)
-                // Skip GOTO and JSR as per GotoObfuscator design
+                // Skip GOTO and JSR
                 return (op >= IFEQ && op <= IF_ACMPNE) || op == IFNULL || op == IFNONNULL;
             })
             // Note: Not skipping backward jumps per user decision (more aggressive)
@@ -535,7 +535,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     }
 
     /**
-     * Opaque Hash predicate generator (inspired by Skidfuscator's hash system)
+     * Opaque Hash predicate generator
      * Creates an expression that computes to the expected value through complex operations
      */
     private static class OpaqueHash {
@@ -554,7 +554,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         public InsnList getHashExpression() {
             InsnList expr = new InsnList();
 
-            // Choose random obfuscation pattern (expanded from skidfuscator)
+            // Choose random obfuscation pattern
             switch(ThreadLocalRandom.current().nextInt(7)) {
                 case 0 -> {
                     // Pattern: (seed XOR magic) == expectedValue
