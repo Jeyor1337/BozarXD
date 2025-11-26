@@ -9,16 +9,12 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class InvokeDynamicTransformer extends ClassTransformer {
 
-    private static final String BOOTSTRAP_METHOD_NAME = "bootstrap";
     private static final String BOOTSTRAP_METHOD_DESC = "(Ljava/lang/invoke/MethodHandles$Lookup;" +
             "Ljava/lang/String;Ljava/lang/invoke/MethodType;J)Ljava/lang/invoke/CallSite;";
-
-    // Invoke type encoding (using magic numbers like GotoObfuscator)
-    private static final long INVOKE_STATIC = 0x1FFFFFF2L;
-    private static final long INVOKE_VIRTUAL = 0x1FFFFFF3L;
 
     // Inner class to store method invocation data
     private static class InvokeData {
@@ -33,8 +29,39 @@ public class InvokeDynamicTransformer extends ClassTransformer {
         }
     }
 
-    // Track method mappings per class
-    private final Map<String, LinkedHashMap<String, InvokeData>> classInvokeMap = new HashMap<>();
+    // Per-class context for randomized bootstrap name and magic numbers
+    private static class ClassContext {
+        final String bootstrapMethodName;
+        final long invokeStaticMagic;
+        final long invokeVirtualMagic;
+        final LinkedHashMap<String, InvokeData> invokeMap = new LinkedHashMap<>();
+
+        ClassContext() {
+            // Generate random bootstrap method name (8-12 chars)
+            this.bootstrapMethodName = generateRandomName();
+            // Generate random magic numbers (ensure they are different and non-zero)
+            long magic1, magic2;
+            do {
+                magic1 = ThreadLocalRandom.current().nextLong(0x10000000L, 0x7FFFFFFFL);
+                magic2 = ThreadLocalRandom.current().nextLong(0x10000000L, 0x7FFFFFFFL);
+            } while (magic1 == magic2);
+            this.invokeStaticMagic = magic1;
+            this.invokeVirtualMagic = magic2;
+        }
+
+        private static String generateRandomName() {
+            StringBuilder sb = new StringBuilder();
+            String chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            int length = ThreadLocalRandom.current().nextInt(8, 13);
+            for (int i = 0; i < length; i++) {
+                sb.append(chars.charAt(ThreadLocalRandom.current().nextInt(chars.length())));
+            }
+            return sb.toString();
+        }
+    }
+
+    // Track per-class context
+    private final Map<String, ClassContext> classContextMap = new HashMap<>();
     private String currentClassName;
 
     public InvokeDynamicTransformer(Bozar bozar) {
@@ -44,6 +71,8 @@ public class InvokeDynamicTransformer extends ClassTransformer {
     @Override
     public void transformClass(ClassNode classNode) {
         this.currentClassName = classNode.name;
+        // Create context for this class with randomized bootstrap name and magic numbers
+        classContextMap.computeIfAbsent(currentClassName, k -> new ClassContext());
     }
 
     @Override
@@ -53,10 +82,8 @@ public class InvokeDynamicTransformer extends ClassTransformer {
             return;
         }
 
-        // Get or create invoke map for this class
-        LinkedHashMap<String, InvokeData> invokeMap = classInvokeMap.computeIfAbsent(
-                currentClassName, k -> new LinkedHashMap<>()
-        );
+        // Get class context (with randomized bootstrap name and magic numbers)
+        ClassContext ctx = classContextMap.computeIfAbsent(currentClassName, k -> new ClassContext());
 
         AbstractInsnNode[] instructions = methodNode.instructions.toArray();
         for (AbstractInsnNode insn : instructions) {
@@ -79,18 +106,18 @@ public class InvokeDynamicTransformer extends ClassTransformer {
 
                     // Get or create InvokeData for this method
                     String key = methodInsn.owner + "." + methodInsn.name;
-                    InvokeData invokeData = invokeMap.computeIfAbsent(key, k ->
-                            new InvokeData(invokeMap.size(), methodInsn.owner, methodInsn.name)
+                    InvokeData invokeData = ctx.invokeMap.computeIfAbsent(key, k ->
+                            new InvokeData(ctx.invokeMap.size(), methodInsn.owner, methodInsn.name)
                     );
 
-                    // Encode data: (index << 32) | invokeType
+                    // Encode data: (index << 32) | invokeType (using randomized magic numbers)
                     long encodedData = ((long) invokeData.index << 32) |
-                            (opcode == INVOKESTATIC ? INVOKE_STATIC : INVOKE_VIRTUAL);
+                            (opcode == INVOKESTATIC ? ctx.invokeStaticMagic : ctx.invokeVirtualMagic);
 
                     Handle bootstrapHandle = new Handle(
                             H_INVOKESTATIC,
                             currentClassName,
-                            BOOTSTRAP_METHOD_NAME,
+                            ctx.bootstrapMethodName,
                             BOOTSTRAP_METHOD_DESC,
                             false
                     );
@@ -128,17 +155,17 @@ public class InvokeDynamicTransformer extends ClassTransformer {
     @Override
     public boolean transformOutput(ClassNode classNode) {
         // Add bootstrap method if this class has invoke mappings
-        LinkedHashMap<String, InvokeData> invokeMap = classInvokeMap.get(classNode.name);
-        if (invokeMap != null && !invokeMap.isEmpty()) {
-            addBootstrapMethod(classNode, new ArrayList<>(invokeMap.values()));
+        ClassContext ctx = classContextMap.get(classNode.name);
+        if (ctx != null && !ctx.invokeMap.isEmpty()) {
+            addBootstrapMethod(classNode, ctx, new ArrayList<>(ctx.invokeMap.values()));
         }
         return true;
     }
 
-    private void addBootstrapMethod(ClassNode classNode, List<InvokeData> invokeList) {
+    private void addBootstrapMethod(ClassNode classNode, ClassContext ctx, List<InvokeData> invokeList) {
         // Check if bootstrap method already exists
         boolean exists = classNode.methods.stream()
-                .anyMatch(m -> m.name.equals(BOOTSTRAP_METHOD_NAME) && m.desc.equals(BOOTSTRAP_METHOD_DESC));
+                .anyMatch(m -> m.name.equals(ctx.bootstrapMethodName) && m.desc.equals(BOOTSTRAP_METHOD_DESC));
 
         if (exists) {
             return;
@@ -146,7 +173,7 @@ public class InvokeDynamicTransformer extends ClassTransformer {
 
         MethodNode bootstrapMethod = new MethodNode(
                 ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC,
-                BOOTSTRAP_METHOD_NAME,
+                ctx.bootstrapMethodName,
                 BOOTSTRAP_METHOD_DESC,
                 null,
                 new String[]{"java/lang/Exception"}
@@ -159,102 +186,108 @@ public class InvokeDynamicTransformer extends ClassTransformer {
         // 1: String name (unused)
         // 2: MethodType type
         // 3-4: long data (takes 2 slots)
-        // 5: String owner
-        // 6: String methodName
-        // 7: Class refc
-        // 8: MethodHandle methodHandle
+        // 5: int index (extracted from high 32 bits)
+        // 6: int invokeType (extracted from low 32 bits)
+        // 7: String owner
+        // 8: String methodName
+        // 9: Class refc
+        // 10: MethodHandle methodHandle
 
-        LabelNode labelSwitchIndexEnd = new LabelNode();
-        LabelNode labelSwitchTypeEnd = new LabelNode();
+        LabelNode labelIndexEnd = new LabelNode();
+        LabelNode labelTypeEnd = new LabelNode();
         LabelNode labelError = new LabelNode();
+        LabelNode labelStatic = new LabelNode();
+        LabelNode labelVirtual = new LabelNode();
 
-        // First tableswitch: decode method index from high 32 bits
-        // Extract index: data >>> 32
+        // Extract index: index = (int)(data >>> 32)
         instructions.add(new VarInsnNode(LLOAD, 3)); // load data
         instructions.add(new LdcInsnNode(32));
         instructions.add(new InsnNode(LUSHR));
         instructions.add(new InsnNode(L2I));
+        instructions.add(new VarInsnNode(ISTORE, 5)); // store index
 
-        // Create labels for each method index
+        // Extract invokeType: invokeType = (int)(data & 0xFFFFFFFF)
+        instructions.add(new VarInsnNode(LLOAD, 3)); // load data
+        instructions.add(new LdcInsnNode(0xFFFFFFFFL));
+        instructions.add(new InsnNode(LAND));
+        instructions.add(new InsnNode(L2I));
+        instructions.add(new VarInsnNode(ISTORE, 6)); // store invokeType
+
+        // === FIRST IF-ELSE CHAIN: Method index dispatch ===
+        // Generate if-else chain for method index lookup (replaces TableSwitch)
         LabelNode[] indexLabels = new LabelNode[invokeList.size()];
         for (int i = 0; i < invokeList.size(); i++) {
             indexLabels[i] = new LabelNode();
         }
 
-        instructions.add(new TableSwitchInsnNode(
-                0,
-                invokeList.size() - 1,
-                labelError,
-                indexLabels
-        ));
+        // Generate: if (index == 0) goto label0; else if (index == 1) goto label1; ...
+        for (int i = 0; i < invokeList.size(); i++) {
+            instructions.add(new VarInsnNode(ILOAD, 5)); // load index
+            instructions.add(new LdcInsnNode(i));
+            instructions.add(new JumpInsnNode(IF_ICMPEQ, indexLabels[i]));
+        }
+        // Default: error
+        instructions.add(new JumpInsnNode(GOTO, labelError));
 
         // Generate code for each index case
         for (int i = 0; i < invokeList.size(); i++) {
             InvokeData data = invokeList.get(i);
             instructions.add(indexLabels[i]);
-            instructions.add(new FrameNode(F_SAME, 0, null, 0, null));
 
             // Load owner and name
             instructions.add(new LdcInsnNode(data.owner.replace('/', '.')));
-            instructions.add(new VarInsnNode(ASTORE, 5)); // store owner
+            instructions.add(new VarInsnNode(ASTORE, 7)); // store owner
             instructions.add(new LdcInsnNode(data.name));
-            instructions.add(new VarInsnNode(ASTORE, 6)); // store methodName
-            instructions.add(new JumpInsnNode(GOTO, labelSwitchIndexEnd));
+            instructions.add(new VarInsnNode(ASTORE, 8)); // store methodName
+            instructions.add(new JumpInsnNode(GOTO, labelIndexEnd));
         }
 
-        // After index switch: find class
-        instructions.add(labelSwitchIndexEnd);
-        instructions.add(new FrameNode(F_APPEND, 2, new Object[]{"java/lang/String", "java/lang/String"}, 0, null));
+        // After index dispatch: find class
+        instructions.add(labelIndexEnd);
 
         // lookup.findClass(owner)
         instructions.add(new VarInsnNode(ALOAD, 0)); // lookup
-        instructions.add(new VarInsnNode(ALOAD, 5)); // owner
+        instructions.add(new VarInsnNode(ALOAD, 7)); // owner
         instructions.add(new MethodInsnNode(INVOKEVIRTUAL,
                 "java/lang/invoke/MethodHandles$Lookup",
                 "findClass",
                 "(Ljava/lang/String;)Ljava/lang/Class;",
                 false));
-        instructions.add(new VarInsnNode(ASTORE, 7)); // store refc
+        instructions.add(new VarInsnNode(ASTORE, 9)); // store refc
 
-        // Second tableswitch: decode invoke type from low 32 bits
-        // Extract type: data & 0xFFFFFFFF
-        instructions.add(new VarInsnNode(LLOAD, 3)); // load data
-        instructions.add(new LdcInsnNode(0xFFFFFFFFL));
-        instructions.add(new InsnNode(LAND));
-        instructions.add(new InsnNode(L2I));
+        // === SECOND IF-ELSE CHAIN: Invoke type dispatch ===
+        // if (invokeType == INVOKE_STATIC_MAGIC) goto labelStatic
+        instructions.add(new VarInsnNode(ILOAD, 6)); // load invokeType
+        instructions.add(new LdcInsnNode((int) ctx.invokeStaticMagic));
+        instructions.add(new JumpInsnNode(IF_ICMPEQ, labelStatic));
 
-        LabelNode labelStatic = new LabelNode();
-        LabelNode labelVirtual = new LabelNode();
+        // else if (invokeType == INVOKE_VIRTUAL_MAGIC) goto labelVirtual
+        instructions.add(new VarInsnNode(ILOAD, 6)); // load invokeType
+        instructions.add(new LdcInsnNode((int) ctx.invokeVirtualMagic));
+        instructions.add(new JumpInsnNode(IF_ICMPEQ, labelVirtual));
 
-        instructions.add(new TableSwitchInsnNode(
-                (int) INVOKE_STATIC,
-                (int) INVOKE_VIRTUAL,
-                labelError,
-                labelStatic,
-                labelVirtual
-        ));
+        // else goto error
+        instructions.add(new JumpInsnNode(GOTO, labelError));
 
         // Case: INVOKESTATIC
         instructions.add(labelStatic);
-        instructions.add(new FrameNode(F_APPEND, 1, new Object[]{"java/lang/Class"}, 0, null));
         instructions.add(new VarInsnNode(ALOAD, 0)); // lookup
-        instructions.add(new VarInsnNode(ALOAD, 7)); // refc
-        instructions.add(new VarInsnNode(ALOAD, 6)); // methodName
+        instructions.add(new VarInsnNode(ALOAD, 9)); // refc
+        instructions.add(new VarInsnNode(ALOAD, 8)); // methodName
         instructions.add(new VarInsnNode(ALOAD, 2)); // methodType
         instructions.add(new MethodInsnNode(INVOKEVIRTUAL,
                 "java/lang/invoke/MethodHandles$Lookup",
                 "findStatic",
                 "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
                 false));
-        instructions.add(new VarInsnNode(ASTORE, 8)); // store methodHandle
-        instructions.add(new JumpInsnNode(GOTO, labelSwitchTypeEnd));
+        instructions.add(new VarInsnNode(ASTORE, 10)); // store methodHandle
+        instructions.add(new JumpInsnNode(GOTO, labelTypeEnd));
 
         // Case: INVOKEVIRTUAL
         instructions.add(labelVirtual);
-        instructions.add(new FrameNode(F_SAME, 0, null, 0, null));
         instructions.add(new VarInsnNode(ALOAD, 0)); // lookup
-        instructions.add(new VarInsnNode(ALOAD, 7)); // refc
-        instructions.add(new VarInsnNode(ALOAD, 6)); // methodName
+        instructions.add(new VarInsnNode(ALOAD, 9)); // refc
+        instructions.add(new VarInsnNode(ALOAD, 8)); // methodName
         instructions.add(new VarInsnNode(ALOAD, 2)); // methodType
 
         // Drop first parameter (we added owner to descriptor, but findVirtual expects original)
@@ -271,12 +304,11 @@ public class InvokeDynamicTransformer extends ClassTransformer {
                 "findVirtual",
                 "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
                 false));
-        instructions.add(new VarInsnNode(ASTORE, 8)); // store methodHandle
-        instructions.add(new JumpInsnNode(GOTO, labelSwitchTypeEnd));
+        instructions.add(new VarInsnNode(ASTORE, 10)); // store methodHandle
+        instructions.add(new JumpInsnNode(GOTO, labelTypeEnd));
 
         // Error case: throw IllegalStateException
         instructions.add(labelError);
-        instructions.add(new FrameNode(F_SAME, 0, null, 0, null));
         instructions.add(new TypeInsnNode(NEW, "java/lang/IllegalStateException"));
         instructions.add(new InsnNode(DUP));
         instructions.add(new MethodInsnNode(INVOKESPECIAL,
@@ -286,12 +318,11 @@ public class InvokeDynamicTransformer extends ClassTransformer {
                 false));
         instructions.add(new InsnNode(ATHROW));
 
-        // After type switch: create ConstantCallSite and return
-        instructions.add(labelSwitchTypeEnd);
-        instructions.add(new FrameNode(F_APPEND, 1, new Object[]{"java/lang/invoke/MethodHandle"}, 0, null));
+        // After type dispatch: create ConstantCallSite and return
+        instructions.add(labelTypeEnd);
         instructions.add(new TypeInsnNode(NEW, "java/lang/invoke/ConstantCallSite"));
         instructions.add(new InsnNode(DUP));
-        instructions.add(new VarInsnNode(ALOAD, 8)); // methodHandle
+        instructions.add(new VarInsnNode(ALOAD, 10)); // methodHandle
         instructions.add(new MethodInsnNode(INVOKESPECIAL,
                 "java/lang/invoke/ConstantCallSite",
                 "<init>",
@@ -301,7 +332,7 @@ public class InvokeDynamicTransformer extends ClassTransformer {
 
         bootstrapMethod.instructions = instructions;
         bootstrapMethod.maxStack = 6;
-        bootstrapMethod.maxLocals = 9;
+        bootstrapMethod.maxLocals = 11;
 
         classNode.methods.add(bootstrapMethod);
     }
