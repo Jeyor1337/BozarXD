@@ -17,10 +17,11 @@ import java.util.stream.Collectors;
  *
  * Implements multiple pure-ASM control flow obfuscation techniques:
  * 1. Exception-based control flow
- * 2. Opaque predicate guards
- * 3. Jump chaining (indirect jumps)
- * 4. Bogus conditional branches
+ * 2. TableSwitch trap obfuscation
+ * 3. Bogus conditional branches
+ * 4. Opaque predicate guards
  * 5. Stack-based control flow obfuscation
+ * 6. Reverse Jump obfuscation - creates explicit else branches
  *
  * Features:
  * - All techniques use only ASM (no Maple IR dependency)
@@ -40,6 +41,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
     // Obfuscation intensity (higher = more aggressive)
     private static final double BOGUS_JUMP_PROBABILITY = 0.3;
+    private static final double REVERSE_JUMP_PROBABILITY = 0.5; // 50% of conditional jumps will be reversed
     // TableSwitch trap configuration
     private static final int TRAP_LABELS_MIN = 5;
     private static final int TRAP_LABELS_MAX = 10;
@@ -69,7 +71,14 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         methodCounter++;
 
         // Apply multiple control flow obfuscation techniques
-        // Each technique is applied probabilistically for variety
+        // Using strategy D: Double Reverse (Most Aggressive)
+        // Execution order: 6→1→2→3→4→5→6
+        // ReverseJump runs at both start and end:
+        // - First pass reverses original jumps
+        // - Second pass reverses newly generated jumps from other transformers
+
+        // 6. Reverse Jump obfuscation - FIRST PASS: reverses original conditional jumps
+        applyReverseJumpObfuscation(methodNode);
 
         // 1. Exception-based range transformation to GOTO instructions
         applyRangeTransformation(classNode, methodNode);
@@ -85,6 +94,9 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
         // 5. Stack-based control flow obfuscation
         applyStackBasedObfuscation(methodNode);
+
+        // 6. Reverse Jump obfuscation - SECOND PASS: reverses newly generated jumps
+        applyReverseJumpObfuscation(methodNode);
     }
 
     /**
@@ -505,6 +517,96 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         }
 
         return ops;
+    }
+
+    /**
+     * Reverse Jump Obfuscation
+     *
+     * Transforms conditional jumps by reversing the condition and adding an explicit GOTO.
+     * This creates an explicit "else branch" that confuses decompilers.
+     *
+     * Original: IF_XX target
+     *           next_code
+     *
+     * After:    IF_YY offset    (reversed condition, jumps to offset if original would NOT jump)
+     *           GOTO target     (unconditional jump to original target)
+     *           offset:         (new label)
+     *           next_code
+     *
+     * Effect: The implicit "else" becomes an explicit GOTO, inverting the control flow logic
+     */
+    private void applyReverseJumpObfuscation(MethodNode methodNode) {
+        if(methodNode.instructions.size() > 3000) return; // Skip large methods
+
+        // Collect all conditional jump instructions
+        List<JumpInsnNode> conditionalJumps = Arrays.stream(methodNode.instructions.toArray())
+            .filter(insn -> insn instanceof JumpInsnNode)
+            .map(insn -> (JumpInsnNode)insn)
+            .filter(jump -> {
+                int op = jump.getOpcode();
+                // Include all conditional jumps (IFEQ-IF_ACMPNE, IFNULL, IFNONNULL)
+                // Skip GOTO and JSR
+                return (op >= IFEQ && op <= IF_ACMPNE) || op == IFNULL || op == IFNONNULL;
+            })
+            // Apply probability filter
+            .filter(jump -> ThreadLocalRandom.current().nextDouble() < REVERSE_JUMP_PROBABILITY)
+            .collect(Collectors.toList());
+
+        for(JumpInsnNode jump : conditionalJumps) {
+            transformWithReverseJump(methodNode, jump);
+        }
+    }
+
+    /**
+     * Transform a single conditional jump using the reverse jump technique
+     */
+    private void transformWithReverseJump(MethodNode methodNode, JumpInsnNode jump) {
+        // Get the original target label
+        LabelNode originalTarget = jump.label;
+
+        // Create a new offset label for the "fall-through" case
+        LabelNode offsetLabel = new LabelNode();
+
+        // Build the instruction list to insert after the reversed jump
+        InsnList insertList = new InsnList();
+        // GOTO to original target (this is the new "then" branch)
+        insertList.add(new JumpInsnNode(GOTO, originalTarget));
+        // Offset label (this is where the reversed condition jumps to)
+        insertList.add(offsetLabel);
+
+        // Reverse the jump opcode and update target
+        int reversedOpcode = reverseJumpOpcode(jump.getOpcode());
+        jump.setOpcode(reversedOpcode);
+        jump.label = offsetLabel;
+
+        // Insert the GOTO and offset label after the jump
+        methodNode.instructions.insert(jump, insertList);
+    }
+
+    /**
+     * Reverse a conditional jump opcode to its logical opposite
+     * Example: IFEQ (branch if == 0) -> IFNE (branch if != 0)
+     */
+    private int reverseJumpOpcode(int opcode) {
+        return switch (opcode) {
+            case IFEQ -> IFNE;
+            case IFNE -> IFEQ;
+            case IFLT -> IFGE;
+            case IFGE -> IFLT;
+            case IFGT -> IFLE;
+            case IFLE -> IFGT;
+            case IF_ICMPEQ -> IF_ICMPNE;
+            case IF_ICMPNE -> IF_ICMPEQ;
+            case IF_ICMPLT -> IF_ICMPGE;
+            case IF_ICMPGE -> IF_ICMPLT;
+            case IF_ICMPGT -> IF_ICMPLE;
+            case IF_ICMPLE -> IF_ICMPGT;
+            case IF_ACMPEQ -> IF_ACMPNE;
+            case IF_ACMPNE -> IF_ACMPEQ;
+            case IFNULL -> IFNONNULL;
+            case IFNONNULL -> IFNULL;
+            default -> throw new IllegalStateException("Unable to reverse jump opcode: " + opcode);
+        };
     }
 
     /**
