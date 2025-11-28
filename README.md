@@ -78,107 +78,40 @@ java -jar BozarXD-1.7.0-jar-with-auto-modules.jar -input input.jar -output outpu
 
 **Note:** If JavaFX is not available, the application will automatically display CLI mode instructions.
 
-## Exclusion/Inclusion Syntax
+## Exclusion/Inclusion Rules
 
-BozarXD supports flexible exclusion and inclusion patterns with a **priority-based rule system** that allows mixing include and exclude rules.
+BozarXD supports flexible exclusion and inclusion patterns with a **priority-based rule system**.
 
-### Pattern Syntax
+> **[Full Documentation](docs/EXCLUSION_RULES.md)** - Complete guide with all patterns, modes, and examples.
 
-**Wildcard patterns:**
-```
-com.example.Main                    # Exact match - specific class
-com.example.util.*                  # Single-level wildcard - direct classes in package only
-com.example.util.**                 # Multi-level wildcard - package and all subpackages
-*ClassName                          # Suffix wildcard - classes ending with ClassName
-**ClassName                         # Suffix wildcard - classes ending with ClassName (any package)
-```
+### Quick Reference
 
-**Transformer-specific rules:**
-```
-ClassRenamerTransformer:com.example.*    # Apply rule only to ClassRenamerTransformer
-FieldRenamerTransformer:com.example.**   # Apply rule only to FieldRenamerTransformer
-```
+| Pattern | Description |
+|---------|-------------|
+| `com.example.Main` | Exact match |
+| `com.example.*` | Single-level wildcard |
+| `com.example.**` | Multi-level wildcard (includes subpackages) |
+| `!com.example.**` | Include rule (whitelist mode) |
+| `ClassRenamerTransformer:com.example.*` | Transformer-specific rule |
 
 ### Rule Modes
 
-#### 1. Blacklist Mode (Default)
-By default, all classes are **obfuscated** except those matching exclusion patterns:
+- **Blacklist (default)**: All classes obfuscated except matches
+- **Whitelist**: Only `!` prefixed patterns are obfuscated
+- **Mixed**: Combine both, most specific rule wins
 
-```
-com.example.Main                    # Exclude this class from obfuscation
-com.example.util.**                 # Exclude entire util package
-```
+### Quick Examples
 
-#### 2. Whitelist Mode
-When **any** rule starts with `!`, all classes are **excluded by default**, and only `!` patterns are obfuscated:
-
-```
-!com.example.core.**                # Only obfuscate core package
-!com.example.Main                   # Only obfuscate Main class
-```
-
-#### 3. Mixed Mode (New)
-You can now **mix include (`!`) and exclude rules** with automatic priority resolution:
-
-```
-!com.example.**                     # Include entire example package
-com.example.util.**                 # But exclude util subpackage
-!com.example.util.CryptoHelper      # But re-include this specific class (exact match wins)
-```
-
-### Rule Priority System
-
-When multiple rules match a class, the **most specific rule wins**:
-
-**Priority levels (highest to lowest):**
-1. **Exact match** - `com.example.Main` (score: 500 + length)
-2. **Single-level wildcard** - `com.example.*` (score: 400 + length)
-3. **Multi-level wildcard** - `com.example.**` (score: 300 + length)
-4. **Suffix wildcards** - `**Test`, `*Test` (score: 100-200 + length)
-
-**Additional factors:**
-- Longer patterns have higher priority (more specific)
-- Transformer-specific rules get +1000 bonus score
-
-### Configuration Examples
-
-**Blacklist mode** - Obfuscate everything except utilities:
 ```json
-{
-  "exclude": "com.example.util.**\ncom.example.Main"
-}
-```
+// Blacklist - exclude from obfuscation
+{ "exclude": "com.example.api.**" }
 
-**Whitelist mode** - Only obfuscate core package:
-```json
-{
-  "exclude": "!com.example.core.**"
-}
-```
+// Whitelist - only obfuscate these
+{ "exclude": "!com.example.core.**" }
 
-**Mixed mode** - Include package but exclude subpackage:
-```json
-{
-  "exclude": "!com.example.**\ncom.example.util.**"
-}
-```
-Result: All `com.example.*` classes are obfuscated except `com.example.util.*`
+// Mixed - include package, exclude subpackage
+{ "exclude": "!com.example.**\ncom.example.util.**" }
 
-**Mixed mode with exact override** - Fine-grained control:
-```json
-{
-  "exclude": "!com.myapp.**\ncom.myapp.debug.**\n!com.myapp.debug.Logger"
-}
+// Transformer-specific - keep names but obfuscate code
+{ "exclude": "ClassRenamerTransformer:com.example.entities.**" }
 ```
-Result:
-- `com.myapp.Main` - ✓ Obfuscated (included by `!com.myapp.**`)
-- `com.myapp.debug.DebugUtils` - ✗ Not obfuscated (excluded by `com.myapp.debug.**`)
-- `com.myapp.debug.Logger` - ✓ Obfuscated (exact match `!` has highest priority)
-
-**Transformer-specific mixed rules**:
-```json
-{
-  "exclude": "!com.example.**\nClassRenamerTransformer:com.example.entities.**"
-}
-```
-Result: Everything in `com.example.**` is obfuscated, but entities are not renamed (other transformers still apply)

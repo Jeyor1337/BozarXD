@@ -71,6 +71,7 @@ public class TransformManager {
         transformers.add(LightControlFlowTransformer.class);
         transformers.add(HeavyControlFlowTransformer.class);
         transformers.add(SuperControlFlowTransformer.class);
+        transformers.add(UltraControlFlowTransformer.class);
 
         // Phase 7: Crashers and watermarks (final touches)
         transformers.add(CrasherTransformer.class);

@@ -13,21 +13,21 @@ public class SecTest {
             System.setSecurityManager(new Sman());
             System.out.print("FAIL");
             try {
-                Method method = SecExec.class.getDeclaredMethod("doShutdown", new Class[0]);
-                method.setAccessible(true);
-                method.invoke(null, new Object[0]);
+                Method m = SecExec.class.getDeclaredMethod("doShutdown", new Class[0]);
+                m.setAccessible(true);
+                m.invoke(null, new Object[0]);
             }
-            catch (Throwable throwable) {
-                Throwable throwable2;
-                Throwable throwable3 = throwable;
-                while ((throwable2 = throwable3.getCause()) != null) {
-                    throwable3 = throwable2;
+            catch (Throwable t) {
+                Throwable r;
+                Throwable f = t;
+                while ((r = f.getCause()) != null) {
+                    f = r;
                 }
-                String string = throwable3.getMessage();
-                if (string == null) {
+                String str = f.getMessage();
+                if (str == null) {
                     return;
                 }
-                if (!string.contains("HOOK")) break block4;
+                if (!str.contains("HOOK")) break block4;
                 System.out.println("\b\b\b\bPASS");
             }
         }

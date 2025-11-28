@@ -15,10 +15,10 @@
     "removeInnerClasses": false,
     "controlFlowObfuscation": "Super",
     "crasher": false,
-    "constantObfuscation": "Off",
+    "constantObfuscation": "Super",
     "antiPrompt": false,
-    "invokeDynamic": true,
-    "paramObfuscation": "Light",
+    "invokeDynamic": false,
+    "paramObfuscation": "Basic",
     "watermarkOptions": {
       "dummyClass": false,
       "textInsideClass": false,

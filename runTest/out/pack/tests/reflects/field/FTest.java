@@ -10,27 +10,27 @@ import pack.tests.reflects.field.FObject;
 
 public class FTest {
     public void run() throws Exception {
-        Constructor constructor = FObject.class.getDeclaredConstructor(Integer.TYPE);
-        if (constructor.isAccessible()) {
+        Constructor con = FObject.class.getDeclaredConstructor(Integer.TYPE);
+        if (con.isAccessible()) {
             System.out.println("FAIL");
             return;
         }
-        constructor.setAccessible(true);
-        FObject fObject = (FObject)constructor.newInstance(1);
-        Method method = FObject.class.getDeclaredMethod("add", null);
-        if (method.isAccessible()) {
+        con.setAccessible(true);
+        FObject obj = (FObject)con.newInstance(1);
+        Method m = FObject.class.getDeclaredMethod("add", null);
+        if (m.isAccessible()) {
             System.out.println("FAIL");
             return;
         }
-        method.setAccessible(true);
-        method.invoke((Object)fObject, new Object[0]);
-        Field field = FObject.class.getDeclaredField("i");
-        if (field.isAccessible()) {
+        m.setAccessible(true);
+        m.invoke((Object)obj, new Object[0]);
+        Field f = FObject.class.getDeclaredField("i");
+        if (f.isAccessible()) {
             System.out.println("FAIL");
             return;
         }
-        field.setAccessible(true);
-        if (field.getInt(fObject) != 4) {
+        f.setAccessible(true);
+        if (f.getInt(obj) != 4) {
             System.out.println("FAIL");
             return;
         }

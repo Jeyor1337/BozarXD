@@ -8,8 +8,8 @@ import java.lang.annotation.RetentionPolicy;
 
 @Retention(value=RetentionPolicy.RUNTIME)
 public @interface anno {
-    public String val2() default "yes";
-
     public String val() default "yes";
+
+    public String val2() default "yes";
 }
 

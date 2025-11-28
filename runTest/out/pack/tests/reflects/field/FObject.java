@@ -6,16 +6,11 @@ package pack.tests.reflects.field;
 public class FObject {
     private int i;
 
-    private FObject(int n) {
-        this.i = n;
+    private FObject(int i) {
+        this.i = i;
     }
 
-    private /* synthetic */ void add$13d4(int n, long l) {
-        if ((n ^ (int)l) != 325575236) {
-            while (true) {
-                // Infinite loop
-            }
-        }
+    private void add() {
         this.i += 3;
     }
 }

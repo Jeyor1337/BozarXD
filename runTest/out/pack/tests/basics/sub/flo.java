@@ -4,11 +4,11 @@
 package pack.tests.basics.sub;
 
 class flo {
-    int solve(int n, int n2) {
-        return n + n2;
+    flo() {
     }
 
-    flo() {
+    int solve(int a, int b) {
+        return a + b;
     }
 }
 

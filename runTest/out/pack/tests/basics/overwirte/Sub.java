@@ -10,13 +10,13 @@ public class Sub
 extends Super {
     @Override
     public void run() {
-        Sub sub = this;
-        System.out.println(((Face)sub).face(1));
+        Sub o = this;
+        System.out.println(((Face)o).face(1));
     }
 
     @Override
-    public String face(int n) {
-        if (n == 1) {
+    public String face(int i) {
+        if (i == 1) {
             return "PASS";
         }
         return "FAIL";

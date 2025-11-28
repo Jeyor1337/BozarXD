@@ -4,21 +4,21 @@
 package pack.tests.reflects.counter;
 
 public class Countee {
-    int cpackp = 1;
     public int cpuli = 0;
-    private int cpriv = 0;
     protected int cprot = 0;
-
-    public void mpackp() {
-    }
+    int cpackp = 1;
+    private int cpriv = 0;
 
     public void mpuli() {
     }
 
-    public void mpriv() {
+    public void mprot() {
     }
 
-    public void mprot() {
+    public void mpackp() {
+    }
+
+    public void mpriv() {
     }
 }
 

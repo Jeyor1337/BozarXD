@@ -10,21 +10,21 @@ public class annoe {
     @anno(val="PASS")
     private static final String fail = "WHAT";
 
+    @anno
+    public void dox() throws Exception {
+        String toGet = "FAIL";
+        for (Field f : annoe.class.getDeclaredFields()) {
+            f.setAccessible(true);
+            anno obj = f.getAnnotation(anno.class);
+            if (obj == null) continue;
+            toGet = obj.val();
+        }
+        System.out.println(toGet);
+    }
+
     @anno(val="no")
     public void dov() {
         System.out.println("FAIL");
-    }
-
-    @anno
-    public void dox() throws Exception {
-        String string = "FAIL";
-        for (Field field : annoe.class.getDeclaredFields()) {
-            field.setAccessible(true);
-            anno anno2 = field.getAnnotation(anno.class);
-            if (anno2 == null) continue;
-            string = anno2.val();
-        }
-        System.out.println(string);
     }
 }
 

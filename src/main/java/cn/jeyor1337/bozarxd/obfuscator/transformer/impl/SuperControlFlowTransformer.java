@@ -7,6 +7,12 @@ import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarCategory;
 import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarConfig;
 import org.objectweb.asm.tree.*;
 
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
+import org.objectweb.asm.tree.analysis.BasicInterpreter;
+import org.objectweb.asm.tree.analysis.BasicValue;
+import org.objectweb.asm.tree.analysis.Frame;
+
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -41,8 +47,8 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     private static final int HASH_PRIME_2 = 0x85EBCA6B;
 
     // XOR chain configuration
-    private static final int XOR_CHAIN_DEPTH = 3;
-    private static final double XOR_CHAIN_PROBABILITY = 0.45;
+    private static final int XOR_CHAIN_DEPTH = 2;
+    private static final double XOR_CHAIN_PROBABILITY = 0.30;
 
     // Lookup switch configuration
     private static final int SWITCH_FAKE_CASES = 3;
@@ -50,6 +56,14 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
     // Exception trap configuration
     private static final double EXCEPTION_TRAP_PROBABILITY = 0.35;
+
+    // Conditional branch obfuscation configuration
+    private static final double CONDITIONAL_BRANCH_PROBABILITY = 0.50;
+    private static final int CONDITIONAL_FAKE_CASES = 2;
+
+    // Field hash verification configuration
+    private static final String HASH_FIELD_NAME = String.valueOf((char)5098);
+    private static final double FIELD_HASH_PROBABILITY = 0.40;
 
     // ==================== Class-Level State ====================
 
@@ -67,6 +81,10 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     // Method counter for unique seeds
     private int methodCounter = 0;
 
+    // Hash field value for verification
+    private int hashFieldValue = 0;
+    private boolean hashFieldCreated = false;
+
     // ==================== Method-Level State ====================
 
     // Method-level seed
@@ -81,14 +99,28 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     // Track original jump instructions to avoid processing newly created ones
     private Set<AbstractInsnNode> originalJumps = new HashSet<>();
 
+    // Frame analysis for stack-aware transformations
+    private Frame<BasicValue>[] frames = null;
+    private Map<AbstractInsnNode, Integer> insnIndexMap = new HashMap<>();
+
     // ==================== Lifecycle Methods ====================
 
     @Override
     public void transformClass(ClassNode classNode) {
         if (!ASMUtils.isClassEligibleToModify(classNode)) return;
 
+        // Skip inner classes entirely - they have complex relationships with outer classes
+        if (classNode.name.contains("$")) return;
+
+        // Skip classes that use reflection heavily - field counts matter
+        if (classUsesReflection(classNode)) return;
+
+        // Skip classes that extend SecurityManager or ClassLoader
+        if (classExtendsSensitiveType(classNode)) return;
+
         this.currentClass = classNode;
         this.methodCounter = 0;
+        this.hashFieldCreated = false;
 
         // Generate class-level seed
         this.classSeed = ThreadLocalRandom.current().nextInt();
@@ -97,6 +129,83 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         this.xorKey1 = ThreadLocalRandom.current().nextInt();
         this.xorKey2 = ThreadLocalRandom.current().nextInt();
         this.hashKey = ThreadLocalRandom.current().nextInt();
+
+        // Create hash verification field only if we have transformable methods
+        if (hasTransformableMethods(classNode)) {
+            this.hashFieldValue = ThreadLocalRandom.current().nextInt();
+            FieldNode hashField = new FieldNode(
+                ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
+                HASH_FIELD_NAME,
+                "Ljava/lang/String;",
+                null,
+                null
+            );
+            classNode.fields.add(hashField);
+
+            // Initialize field in <clinit>
+            MethodNode clinit = ASMUtils.findOrCreateClinit(classNode);
+            InsnList initInsns = new InsnList();
+            initInsns.add(new LdcInsnNode(String.valueOf(hashFieldValue)));
+            initInsns.add(new FieldInsnNode(PUTSTATIC, classNode.name, HASH_FIELD_NAME, "Ljava/lang/String;"));
+            clinit.instructions.insert(initInsns);
+
+            this.hashFieldCreated = true;
+        }
+    }
+
+    /**
+     * Check if class uses reflection or resource loading (methods that count fields/methods)
+     */
+    private boolean classUsesReflection(ClassNode classNode) {
+        for (MethodNode method : classNode.methods) {
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof MethodInsnNode min) {
+                    // Check for reflection that counts fields/methods
+                    if (min.owner.equals("java/lang/Class")) {
+                        if (min.name.equals("getFields") || min.name.equals("getDeclaredFields") ||
+                            min.name.equals("getMethods") || min.name.equals("getDeclaredMethods") ||
+                            min.name.equals("getConstructors") || min.name.equals("getDeclaredConstructors") ||
+                            min.name.equals("getResourceAsStream") || min.name.equals("getResource")) {
+                            return true;
+                        }
+                    }
+                    // Check for stack trace usage
+                    if (min.owner.equals("java/lang/Throwable") && min.name.equals("getStackTrace")) {
+                        return true;
+                    }
+                    // Check for resource loading
+                    if (min.name.equals("getResourceAsStream") || min.name.equals("getResource")) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if class extends sensitive types like SecurityManager or ClassLoader
+     */
+    private boolean classExtendsSensitiveType(ClassNode classNode) {
+        if (classNode.superName == null) return false;
+        return classNode.superName.equals("java/lang/SecurityManager") ||
+               classNode.superName.equals("java/lang/ClassLoader") ||
+               classNode.superName.contains("SecurityManager") ||
+               classNode.superName.contains("ClassLoader");
+    }
+
+    /**
+     * Check if class has methods that can be transformed
+     */
+    private boolean hasTransformableMethods(ClassNode classNode) {
+        for (MethodNode method : classNode.methods) {
+            if (ASMUtils.isMethodEligibleToModify(classNode, method) && !shouldSkipMethod(method)) {
+                if (method.instructions.size() >= 3) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override
@@ -114,6 +223,9 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
     @Override
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
+        // Skip if class was skipped (currentClass is null or different)
+        if (this.currentClass == null || !this.currentClass.name.equals(classNode.name)) return;
+
         if (!ASMUtils.isMethodEligibleToModify(classNode, methodNode)) return;
         if (shouldSkipMethod(methodNode)) return;
 
@@ -123,6 +235,23 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         this.blockSeeds.clear();
         this.blockHashes.clear();
         this.originalJumps.clear();
+        this.frames = null;
+        this.insnIndexMap.clear();
+
+        // Perform frame analysis for stack-aware transformations
+        try {
+            Analyzer<BasicValue> analyzer = new Analyzer<>(new BasicInterpreter());
+            frames = analyzer.analyze(classNode.name, methodNode);
+
+            // Build instruction index map for quick lookup
+            int index = 0;
+            for (AbstractInsnNode insn : methodNode.instructions) {
+                insnIndexMap.put(insn, index++);
+            }
+        } catch (AnalyzerException e) {
+            // If analysis fails, proceed without stack awareness
+            frames = null;
+        }
 
         // Collect original jump instructions BEFORE any transformation
         // This prevents processing newly created jumps which can cause infinite loops
@@ -150,6 +279,9 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
         // Phase 5: Exception trap insertion
         applyExceptionTrapTransformation(classNode, methodNode);
+
+        // Phase 6: Conditional branch obfuscation (new)
+        applyConditionalBranchTransformation(classNode, methodNode);
     }
 
     // ==================== Initialization Methods ====================
@@ -191,14 +323,109 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     }
 
     private boolean shouldSkipMethod(MethodNode methodNode) {
-        // Skip small methods
-        if (methodNode.instructions.size() < 15) return true;
+        // Skip very small methods (less than 3 instructions can't be meaningfully obfuscated)
+        if (methodNode.instructions.size() < 3) return true;
 
         // Skip special methods
         if ((methodNode.access & (ACC_BRIDGE | ACC_SYNTHETIC | ACC_ABSTRACT | ACC_NATIVE)) != 0) return true;
 
         // Skip reflection-heavy methods
-        return methodUsesReflection(methodNode);
+        if (methodUsesReflection(methodNode)) return true;
+
+        // Skip methods with precision-sensitive floating point operations
+        if (methodHasPrecisionSensitiveCode(methodNode)) return true;
+
+        // Skip recursive methods - they are sensitive to control flow changes
+        if (methodHasSelfCall(methodNode)) return true;
+
+        // Skip methods using lambdas, method references, or threading
+        if (methodUsesLambdaOrThreading(methodNode)) return true;
+
+        return false;
+    }
+
+    /**
+     * Check if method uses lambdas, method references, or threading
+     */
+    private boolean methodUsesLambdaOrThreading(MethodNode methodNode) {
+        for (AbstractInsnNode insn : methodNode.instructions) {
+            // Check for invokedynamic (used by lambdas and method references)
+            if (insn instanceof InvokeDynamicInsnNode) {
+                return true;
+            }
+
+            // Check for thread-related and classloader-related calls
+            if (insn instanceof MethodInsnNode min) {
+                if (min.owner.contains("Thread") ||
+                    min.owner.contains("Executor") ||
+                    min.owner.contains("Runnable") ||
+                    min.owner.contains("Callable") ||
+                    min.owner.contains("Future") ||
+                    min.owner.contains("ClassLoader") ||
+                    min.owner.contains("Loader") ||
+                    min.name.equals("submit") ||
+                    min.name.equals("execute") ||
+                    min.name.equals("sleep") ||
+                    min.name.equals("wait") ||
+                    min.name.equals("notify") ||
+                    min.name.equals("findClass") ||
+                    min.name.equals("loadClass") ||
+                    min.name.equals("defineClass") ||
+                    min.name.equals("newInstance") ||
+                    min.name.equals("getResourceAsStream")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if method calls itself (recursive method)
+     */
+    private boolean methodHasSelfCall(MethodNode methodNode) {
+        String methodName = methodNode.name;
+        String methodDesc = methodNode.desc;
+        for (AbstractInsnNode insn : methodNode.instructions) {
+            if (insn instanceof MethodInsnNode min) {
+                // Check if it's a call to a method with the same name
+                // (We don't have class info here, but same name+desc is a good indicator)
+                if (min.name.equals(methodName) && min.desc.equals(methodDesc)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if method has precision-sensitive floating point code
+     * Skip any method with floating point operations to be safe
+     */
+    private boolean methodHasPrecisionSensitiveCode(MethodNode methodNode) {
+        for (AbstractInsnNode insn : methodNode.instructions) {
+            int opcode = insn.getOpcode();
+
+            // Check for any float/double operations
+            if (opcode == FADD || opcode == FSUB || opcode == FMUL || opcode == FDIV ||
+                opcode == DADD || opcode == DSUB || opcode == DMUL || opcode == DDIV ||
+                opcode == FCMPL || opcode == FCMPG || opcode == DCMPL || opcode == DCMPG ||
+                opcode == F2D || opcode == D2F || opcode == I2F || opcode == I2D ||
+                opcode == F2I || opcode == D2I || opcode == F2L || opcode == D2L ||
+                opcode == FLOAD || opcode == DLOAD || opcode == FSTORE || opcode == DSTORE ||
+                opcode == FRETURN || opcode == DRETURN) {
+                return true;
+            }
+
+            // Check for float/double constants
+            if (insn instanceof LdcInsnNode ldc) {
+                if (ldc.cst instanceof Float || ldc.cst instanceof Double) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private boolean methodHasTryCatch(MethodNode methodNode) {
@@ -217,6 +444,18 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
                 (min.owner.equals("java/lang/Class") &&
                  (min.name.contains("Field") || min.name.contains("Method") ||
                   min.name.equals("forName") || min.name.contains("Annotation"))));
+    }
+
+    /**
+     * Check if the stack is empty at the given instruction index.
+     * Returns true if frames are available and stack is empty, or if frames are not available.
+     */
+    private boolean isStackEmpty(AbstractInsnNode insn) {
+        if (frames == null) return true; // Assume safe if no frame analysis
+        Integer index = insnIndexMap.get(insn);
+        if (index == null || index >= frames.length) return true;
+        Frame<BasicValue> frame = frames[index];
+        return frame == null || frame.getStackSize() == 0;
     }
 
     // ==================== Phase 1: Proxy Block Transformation ====================
@@ -561,8 +800,14 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     private boolean isSmallConstant(AbstractInsnNode insn) {
         int value = getIntegerValue(insn);
         // Skip constants that are commonly used in precision-sensitive operations
-        // -1, 0, 1, 2 are often used in loop counters, array indices, boolean ops
-        return value >= -1 && value <= 2;
+        // and common loop bounds/array sizes
+        // -1, 0, 1, 2, 3 are often used in loop counters, array indices, boolean ops
+        // Small positive values up to 10 are common loop bounds
+        // Also skip common comparison values and powers of 2
+        if (value >= -1 && value <= 10) return true;
+        if (value == 100 || value == 1000 || value == 10000) return true; // Common loop bounds
+        if ((value & (value - 1)) == 0 && value > 0) return true; // Powers of 2
+        return false;
     }
 
     private int getIntegerValue(AbstractInsnNode insn) {
@@ -921,6 +1166,234 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
             "java/lang/ArrayStoreException"
         };
         return exceptions[ThreadLocalRandom.current().nextInt(exceptions.length)];
+    }
+
+    // ==================== Phase 6: Conditional Branch Obfuscation ====================
+
+    /**
+     * Conditional Branch Obfuscation: Convert IF_XX jumps to data-dependent indirect jumps
+     *
+     * This technique transforms conditional jumps (IF_ICMPNE, etc.) into
+     * switch-based dispatch where the branch outcome determines a key value.
+     *
+     * Original: IF_ICMPNE label
+     *           (fallthrough code)
+     *
+     * After:    IF_ICMPNE -> push TRUE_KEY
+     *           (else)    -> push FALSE_KEY
+     *           LOOKUPSWITCH {
+     *             TRUE_KEY  -> label
+     *             FALSE_KEY -> fallthrough_label
+     *             JUNK_KEY1 -> dead_code1
+     *             JUNK_KEY2 -> dead_code2
+     *           }
+     *           fallthrough_label:
+     *           (original fallthrough code)
+     *
+     * NOTE: Only processes conditional jumps where stack is empty (safe transformation)
+     */
+    private void applyConditionalBranchTransformation(ClassNode classNode, MethodNode methodNode) {
+        if (methodNode.instructions.size() > 2500) return;
+
+        // Skip inner classes and static initializers
+        if (classNode.name.contains("$")) return;
+        if (methodNode.name.equals("<clinit>")) return;
+
+        // Skip methods with recursive calls - they are sensitive to control flow changes
+        if (methodHasRecursiveCall(classNode, methodNode)) return;
+
+        // Re-analyze frames after previous transformations
+        try {
+            Analyzer<BasicValue> analyzer = new Analyzer<>(new BasicInterpreter());
+            frames = analyzer.analyze(classNode.name, methodNode);
+            insnIndexMap.clear();
+            int idx = 0;
+            for (AbstractInsnNode insn : methodNode.instructions) {
+                insnIndexMap.put(insn, idx++);
+            }
+        } catch (AnalyzerException e) {
+            return; // Skip if analysis fails
+        }
+
+        // Collect conditional jumps that are safe to transform (stack empty)
+        // Also skip backward jumps to avoid issues with loops
+        List<JumpInsnNode> conditionalJumps = Arrays.stream(methodNode.instructions.toArray())
+            .filter(insn -> insn instanceof JumpInsnNode)
+            .filter(insn -> isConditionalJump(insn.getOpcode()))
+            .filter(insn -> originalJumps.contains(insn))
+            .map(insn -> (JumpInsnNode) insn)
+            .filter(jump -> !isBackwardJump(methodNode, jump))
+            .filter(this::isStackEmptyAfterJump)
+            .filter(jump -> ThreadLocalRandom.current().nextDouble() < CONDITIONAL_BRANCH_PROBABILITY)
+            .collect(Collectors.toList());
+
+        for (JumpInsnNode jump : conditionalJumps) {
+            transformConditionalBranch(classNode, methodNode, jump);
+        }
+    }
+
+    /**
+     * Check if method contains recursive calls (calls to itself)
+     */
+    private boolean methodHasRecursiveCall(ClassNode classNode, MethodNode methodNode) {
+        return Arrays.stream(methodNode.instructions.toArray())
+            .filter(insn -> insn instanceof MethodInsnNode)
+            .map(insn -> (MethodInsnNode) insn)
+            .anyMatch(min -> min.owner.equals(classNode.name) && min.name.equals(methodNode.name));
+    }
+
+    /**
+     * Check if stack is empty after the conditional jump (at fallthrough point)
+     */
+    private boolean isStackEmptyAfterJump(JumpInsnNode jump) {
+        if (frames == null) return false; // Be conservative
+        Integer index = insnIndexMap.get(jump);
+        if (index == null || index + 1 >= frames.length) return false;
+        Frame<BasicValue> frame = frames[index + 1];
+        return frame != null && frame.getStackSize() == 0;
+    }
+
+    private void transformConditionalBranch(ClassNode classNode, MethodNode methodNode, JumpInsnNode condJump) {
+        LabelNode originalTarget = condJump.label;
+        int originalOpcode = condJump.getOpcode();
+
+        // Create labels
+        LabelNode trueBranchLabel = new LabelNode();
+        LabelNode fallthroughLabel = new LabelNode();
+        LabelNode switchLabel = new LabelNode();
+        LabelNode exceptionLabel = new LabelNode();
+
+        // Generate keys
+        int trueKey = ThreadLocalRandom.current().nextInt(1000);
+        int falseKey;
+        do {
+            falseKey = ThreadLocalRandom.current().nextInt(1000);
+        } while (falseKey == trueKey);
+
+        Set<Integer> usedKeys = new HashSet<>();
+        usedKeys.add(trueKey);
+        usedKeys.add(falseKey);
+
+        // Generate fake keys
+        int[] fakeKeys = new int[CONDITIONAL_FAKE_CASES];
+        LabelNode[] fakeLabels = new LabelNode[CONDITIONAL_FAKE_CASES];
+        for (int i = 0; i < CONDITIONAL_FAKE_CASES; i++) {
+            int fakeKey;
+            do {
+                fakeKey = ThreadLocalRandom.current().nextInt(1000);
+            } while (usedKeys.contains(fakeKey));
+            usedKeys.add(fakeKey);
+            fakeKeys[i] = fakeKey;
+            fakeLabels[i] = new LabelNode();
+        }
+
+        // Build all keys and labels arrays
+        int totalCases = 2 + CONDITIONAL_FAKE_CASES;
+        int[] allKeys = new int[totalCases];
+        LabelNode[] allLabels = new LabelNode[totalCases];
+
+        allKeys[0] = trueKey;
+        allLabels[0] = originalTarget;  // True branch goes to original target
+        allKeys[1] = falseKey;
+        allLabels[1] = fallthroughLabel;  // False branch goes to fallthrough
+        for (int i = 0; i < CONDITIONAL_FAKE_CASES; i++) {
+            allKeys[2 + i] = fakeKeys[i];
+            allLabels[2 + i] = fakeLabels[i];
+        }
+
+        // Sort by keys for lookupswitch
+        Integer[] indices = new Integer[totalCases];
+        for (int i = 0; i < totalCases; i++) indices[i] = i;
+        Arrays.sort(indices, Comparator.comparingInt(a -> allKeys[a]));
+
+        int[] sortedKeys = new int[totalCases];
+        LabelNode[] sortedLabels = new LabelNode[totalCases];
+        for (int i = 0; i < totalCases; i++) {
+            sortedKeys[i] = allKeys[indices[i]];
+            sortedLabels[i] = allLabels[indices[i]];
+        }
+
+        // Build transformation block
+        InsnList transformBlock = new InsnList();
+
+        // Branch: if condition true, push trueKey, else push falseKey
+        transformBlock.add(new JumpInsnNode(originalOpcode, trueBranchLabel));
+
+        // False path: push falseKey using field hash computation
+        if (hashFieldCreated && ThreadLocalRandom.current().nextDouble() < FIELD_HASH_PROBABILITY) {
+            transformBlock.add(createFieldHashComputation(classNode, falseKey));
+        } else {
+            transformBlock.add(ASMUtils.pushInt(falseKey));
+        }
+        transformBlock.add(new JumpInsnNode(GOTO, switchLabel));
+
+        // True path: push trueKey using field hash computation
+        transformBlock.add(trueBranchLabel);
+        if (hashFieldCreated && ThreadLocalRandom.current().nextDouble() < FIELD_HASH_PROBABILITY) {
+            transformBlock.add(createFieldHashComputation(classNode, trueKey));
+        } else {
+            transformBlock.add(ASMUtils.pushInt(trueKey));
+        }
+
+        // Switch dispatch
+        transformBlock.add(switchLabel);
+        transformBlock.add(new LookupSwitchInsnNode(exceptionLabel, sortedKeys, sortedLabels));
+
+        // Fake handlers (dead code) - jump to exception
+        for (int i = 0; i < CONDITIONAL_FAKE_CASES; i++) {
+            transformBlock.add(fakeLabels[i]);
+            transformBlock.add(new JumpInsnNode(GOTO, exceptionLabel));
+        }
+
+        // Exception block
+        transformBlock.add(exceptionLabel);
+        transformBlock.add(createExceptionThrow());
+
+        // Fallthrough label (after exception block, but execution continues here for false branch)
+        transformBlock.add(fallthroughLabel);
+
+        // Replace conditional jump with transformation block
+        methodNode.instructions.insert(condJump, transformBlock);
+        methodNode.instructions.remove(condJump);
+    }
+
+    /**
+     * Create field hash computation that results in targetKey
+     * Uses: (hashFieldValue XOR magic) == targetKey
+     */
+    private InsnList createFieldHashComputation(ClassNode classNode, int targetKey) {
+        InsnList insns = new InsnList();
+
+        int pattern = ThreadLocalRandom.current().nextInt(3);
+
+        switch (pattern) {
+            case 0 -> {
+                // Get field.hashCode() XOR magic = targetKey
+                int magic = String.valueOf(hashFieldValue).hashCode() ^ targetKey;
+                insns.add(new FieldInsnNode(GETSTATIC, classNode.name, HASH_FIELD_NAME, "Ljava/lang/String;"));
+                insns.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/String", "hashCode", "()I", false));
+                insns.add(ASMUtils.pushInt(magic));
+                insns.add(new InsnNode(IXOR));
+            }
+            case 1 -> {
+                // Get field.length() + offset = targetKey
+                int fieldLength = String.valueOf(hashFieldValue).length();
+                int offset = targetKey - fieldLength;
+                insns.add(new FieldInsnNode(GETSTATIC, classNode.name, HASH_FIELD_NAME, "Ljava/lang/String;"));
+                insns.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/String", "length", "()I", false));
+                insns.add(ASMUtils.pushInt(offset));
+                insns.add(new InsnNode(IADD));
+            }
+            case 2 -> {
+                // Direct with XOR confusion
+                int magic = xorKey1 ^ targetKey;
+                insns.add(ASMUtils.pushInt(xorKey1));
+                insns.add(ASMUtils.pushInt(magic));
+                insns.add(new InsnNode(IXOR));
+            }
+        }
+
+        return insns;
     }
 
     // ==================== Configuration ====================

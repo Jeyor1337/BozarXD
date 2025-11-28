@@ -53,7 +53,8 @@ public class BozarConfig {
             @SerializedName("Off") OFF,
             @SerializedName("Light") LIGHT,
             @SerializedName("Heavy") HEAVY,
-            @SerializedName("Super") SUPER
+            @SerializedName("Super") SUPER,
+            @SerializedName("Ultra") ULTRA
         }
 
         public enum ConstantObfuscationOption {

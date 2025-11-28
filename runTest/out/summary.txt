@@ -1,9 +1,2 @@
-Summary for XiaoShadiaoObf.jar
+Summary for TEST.jar
 Decompiled with CFR 0.152
-
-
-org.objectweb.asm.signature.SignatureReader
-----------------------------
-
-parseType(java.lang.String int org.objectweb.asm.signature.SignatureVisitor )
-  Unable to fully structure code

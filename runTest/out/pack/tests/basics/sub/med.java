@@ -8,8 +8,8 @@ import pack.tests.basics.sub.flo;
 class med {
     int result;
 
-    med(int n, int n2) {
-        this.result = new flo().solve(n, n2);
+    med(int a, int b) {
+        this.result = new flo().solve(a, b);
     }
 }
 
