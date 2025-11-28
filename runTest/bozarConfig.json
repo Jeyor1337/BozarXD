@@ -1,0 +1,35 @@
+{
+  "input": "/data/data/com.termux/files/home/BozarXD/runTest/TEST.jar",
+  "output": "/data/data/com.termux/files/home/BozarXD/runTest/output.jar",
+  "exclude": "com.example.Main\ncom.example.keep.**",
+  "libraries": [
+    "libs/library1.jar",
+    "libs/library2.jar"
+  ],
+  "options": {
+    "rename": "Off",
+    "lineNumbers": "Delete",
+    "localVariables": "Delete",
+    "removeSourceFile": true,
+    "shuffle": true,
+    "removeInnerClasses": false,
+    "controlFlowObfuscation": "Super",
+    "crasher": false,
+    "constantObfuscation": "Off",
+    "antiPrompt": false,
+    "invokeDynamic": true,
+    "paramObfuscation": "Light",
+    "watermarkOptions": {
+      "dummyClass": false,
+      "textInsideClass": false,
+      "ldcPop": false,
+      "zipComment": false,
+      "badAnno": false,
+      "dummyClassText": "BozarXD",
+      "textInsideClassText": "Obfuscated by BozarXD",
+      "ldcPopText": "BozarXD Watermark",
+      "zipCommentText": "Protected by BozarXD",
+      "badAnnoText": "BozarXD"
+    }
+  }
+}
