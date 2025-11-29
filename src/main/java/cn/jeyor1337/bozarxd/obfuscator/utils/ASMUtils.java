@@ -272,7 +272,6 @@ public class ASMUtils implements Opcodes {
         };
     }
 
-    // Float support
     public static AbstractInsnNode pushFloat(float value) {
         if (value == 0.0f) return new InsnNode(FCONST_0);
         else if (value == 1.0f) return new InsnNode(FCONST_1);
@@ -305,7 +304,6 @@ public class ASMUtils implements Opcodes {
         };
     }
 
-    // Double support
     public static AbstractInsnNode pushDouble(double value) {
         if (value == 0.0d) return new InsnNode(DCONST_0);
         else if (value == 1.0d) return new InsnNode(DCONST_1);

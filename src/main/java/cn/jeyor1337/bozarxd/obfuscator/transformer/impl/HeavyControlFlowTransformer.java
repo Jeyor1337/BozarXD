@@ -23,7 +23,7 @@ public class HeavyControlFlowTransformer extends ControlFlowTransformer {
 
     @Override
     public void transformClass(ClassNode classNode) {
-        // Skip interfaces because we cannot declare mutable fields in that
+
         if(!ASMUtils.isClassEligibleToModify(classNode)) return;
         classNode.fields.add(new FieldNode(accessArr[ThreadLocalRandom.current().nextInt(accessArr.length)] | ACC_STATIC, FLOW_FIELD_NAME, "J", null, 0L));
     }
@@ -31,7 +31,7 @@ public class HeavyControlFlowTransformer extends ControlFlowTransformer {
     @Override
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
         if(!ASMUtils.isMethodEligibleToModify(classNode, methodNode)) return;
-        // Add IF instruction if the method doesn't have any
+
         if(Arrays.stream(methodNode.instructions.toArray()).noneMatch(ASMUtils::isIf)) {
             final InsnList il = new InsnList();
             final LabelNode label0 = new LabelNode();
@@ -46,7 +46,6 @@ public class HeavyControlFlowTransformer extends ControlFlowTransformer {
             methodNode.instructions.insert(il);
         }
 
-        // Main obfuscation
         Arrays.stream(methodNode.instructions.toArray())
                 .filter(insn -> ASMUtils.isInvokeMethod(insn, true) || insn.getOpcode() == NEW || ASMUtils.isFieldInsn(insn))
                 .forEach(insn -> {
@@ -128,7 +127,7 @@ public class HeavyControlFlowTransformer extends ControlFlowTransformer {
                     before.add(ASMUtils.pushLong(v2));
                     before.add(label2);
 
-                    { // Switch
+                    {
                         long dividedBy = random.nextLong();
                         var targetBlock = new SwitchBlock(InsnBuilder
                                 .createEmpty()
@@ -148,7 +147,6 @@ public class HeavyControlFlowTransformer extends ControlFlowTransformer {
                         jVar /= dividedBy;
                     }
 
-                    // Random operations
                     switch (random.nextInt(3)) {
                         case 0 -> {
                             before.add(new InsnNode(LXOR));

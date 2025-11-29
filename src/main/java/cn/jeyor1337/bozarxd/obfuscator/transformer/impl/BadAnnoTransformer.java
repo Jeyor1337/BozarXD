@@ -14,10 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/**
- * BadAnnoTransformer - Adds invisible annotations to classes, methods and fields
- * Ported from class-obf obfuscator
- */
 public class BadAnnoTransformer extends ClassTransformer {
 
     private static final String DEFAULT_ANNOTATION = "\n\n\n\n\n\n\n\n\n\n\nBOZAR-XD PROTECTED\n\n\n\n\n\n\n\n\n\n\n";
@@ -36,13 +32,13 @@ public class BadAnnoTransformer extends ClassTransformer {
 
     @Override
     public void transformClass(ClassNode classNode) {
-        // Add invisible annotation to class
+
         addInvisibleAnnotation(classNode);
     }
 
     @Override
     public void transformField(ClassNode classNode, FieldNode fieldNode) {
-        // Add invisible annotation to field
+
         if (fieldNode.invisibleAnnotations == null) {
             fieldNode.invisibleAnnotations = new java.util.ArrayList<>();
         }
@@ -52,7 +48,7 @@ public class BadAnnoTransformer extends ClassTransformer {
 
     @Override
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
-        // Add invisible annotation to method
+
         if (methodNode.invisibleAnnotations == null) {
             methodNode.invisibleAnnotations = new java.util.ArrayList<>();
         }

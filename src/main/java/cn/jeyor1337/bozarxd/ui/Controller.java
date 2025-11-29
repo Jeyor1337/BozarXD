@@ -45,7 +45,6 @@ public class Controller {
     @FXML private Button buttonRemoveLib;
     @FXML private TabPane optionsTab;
 
-    // Configurations
     public TextField input;
     public TextField output;
     public TextArea exclude;
@@ -95,20 +94,18 @@ public class Controller {
 
     @FXML
     public void initialize() {
-        // Redirect outputs to ListView
+
         System.setOut(new RedirectedPrintStream(System.out, null));
         System.setErr(new RedirectedPrintStream(System.err, "ERROR: "));
         log("Initializing controller...");
 
-        // Category tabs
         for (final BozarCategory category : BozarCategory.values()) {
-            // Tab & title
+
             final VBox vBox = new VBox();
             vBox.setSpacing(15);
             vBox.setPadding(new Insets(20));
             this.optionsTab.getTabs().add(new Tab(BozarUtils.getSerializedName(category), vBox));
 
-            // Items
             TransformManager.getTransformers().stream()
                     .map(TransformManager::createTransformerInstance)
                     .filter(Objects::nonNull)
@@ -119,13 +116,11 @@ public class Controller {
                     BozarConfig.EnableType enableType = ct.getEnableType();
                     Object type = enableType.type();
 
-                    // Convert singleton list to object
                     if(type.getClass().isEnum())
                         type = new ArrayList<>(List.of((Enum<?>)type));
 
-                    // Actions
                     if(List.class.isAssignableFrom(type.getClass())) {
-                        // Enum list => ComboBox
+
                         HBox hBox = getHBox(vBox);
                         hBox.getChildren().add(new Label(ct.getText()));
 
@@ -134,14 +129,14 @@ public class Controller {
                         comboBox.setPrefWidth(150);
                         hBox.getChildren().add(comboBox);
                     } else if(type.getClass() == String.class) {
-                        // String => TextField, TextArea
+
                         HBox hBox = getHBox(vBox);
                         var checkBox = new CheckBox(ct.getText());
                         hBox.getChildren().add(checkBox);
 
                         TextInputControl tic;
                         if(((String)type).contains("\n")) {
-                            // TextArea if it contains new line
+
                             tic = new TextArea();
                             tic.setPrefWidth(200);
                             tic.setPrefHeight(200);
@@ -152,7 +147,7 @@ public class Controller {
                         tic.setText((String)enableType.type());
                         hBox.getChildren().add(tic);
                     } else if(type == boolean.class) {
-                        // Boolean => CheckBox
+
                         var checkBox = new CheckBox(ct.getText());
                         vBox.getChildren().add(checkBox);
                     } else throw new IllegalArgumentException();
@@ -161,7 +156,6 @@ public class Controller {
                 }
             });
 
-            // Description
             Region region = new Region();
             VBox.setVgrow(region, Priority.ALWAYS);
             vBox.getChildren().add(region);
@@ -171,7 +165,6 @@ public class Controller {
             vBox.getChildren().add(label);
         }
 
-        // Example usage of exclude
         exclude.setPromptText("com.example.myapp.MyClass\r\ncom.example.myapp.MyClass.myField\r\ncom.example.myapp.MyClass.myMethod()\r\ncom.example.mypackage.**\r\nFieldRenamerTransformer:com.example.MyClass");
 
         final Function<ActionEvent, Window> getWindowFunc = actionEvent -> ((Button)actionEvent.getSource()).getScene().getWindow();
@@ -216,7 +209,7 @@ public class Controller {
             if (file == null || !file.exists() || !file.isDirectory()) return;
             libraries.getItems().addAll(FileUtils.getAllFiles(file).stream()
                     .filter(f -> jarFilter.getExtensions().stream()
-                            .map(s -> s.substring(1)) // remove star
+                            .map(s -> s.substring(1))
                             .allMatch(s -> f.getName().endsWith(s)))
                     .map(f -> {
                 try {
@@ -232,7 +225,6 @@ public class Controller {
                 libraries.getItems().remove(index);
         });
 
-        // Load default config
         try {
             this.configManager.loadDefaultConfig();
         } catch (IOException e) {
@@ -240,7 +232,6 @@ public class Controller {
             this.log("Cannot load default config");
         }
 
-        // Done
         log("Loaded.");
     }
 

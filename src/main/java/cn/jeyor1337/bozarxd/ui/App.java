@@ -23,12 +23,11 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) throws IOException {
-        // FX GUI
+
         FXMLLoader fxmlLoader = new FXMLLoader();
         Parent root = fxmlLoader.load(getClass().getResource("/menu.fxml").openStream());
         Controller controller = fxmlLoader.getController();
 
-        // Handle command lines
         CommandLineParser parser = new DefaultParser();
         try {
             CommandLine cmd = parser.parse(this.getOptions(), this.getParameters().getRaw().toArray(new String[0]));
@@ -45,7 +44,6 @@ public class App extends Application {
             if(cmd.hasOption("output"))
                 controller.output.setText(cmd.getOptionValue("output"));
 
-            // Update checker
             String latestVer = null;
             if(!cmd.hasOption("noupdate")) {
                 try {
@@ -55,7 +53,6 @@ public class App extends Application {
                 }
             } else latestVer = BozarUtils.getVersion();
 
-            // Console mode
             if(cmd.hasOption("console")) {
                 if(!cmd.hasOption("noupdate")) {
                     if(latestVer == null)
@@ -78,7 +75,6 @@ public class App extends Application {
                     BozarUtils.openDownloadURL();
             }
 
-            // GUI
             Scene scene = new Scene(root);
             stage.setTitle(BozarMessage.VERSION_TEXT.toString());
             stage.setScene(scene);

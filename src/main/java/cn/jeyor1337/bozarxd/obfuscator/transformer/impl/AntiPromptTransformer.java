@@ -46,10 +46,9 @@ public class AntiPromptTransformer extends ClassTransformer {
 
     @Override
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
-        // Skip abstract methods and methods in interfaces - they cannot have code
+
         if(!ASMUtils.isMethodEligibleToModify(classNode, methodNode)) return;
 
-        // Inject anti-prompt instructions at the beginning
         InsnList startInsns = new InsnList();
         startInsns.add(new TypeInsnNode(NEW, "java/lang/String"));
         startInsns.add(new InsnNode(DUP));
@@ -60,7 +59,6 @@ public class AntiPromptTransformer extends ClassTransformer {
 
         methodNode.instructions.insert(startInsns);
 
-        // Inject anti-prompt instructions at strategic positions
         int triggerAt = 2 + random.nextInt(10);
         int counter = 0;
 
@@ -71,13 +69,13 @@ public class AntiPromptTransformer extends ClassTransformer {
 
                 switch (strategy) {
                     case 0:
-                        // Strategy 0: Local variable with payload
+
                         String payload0 = pickPayload();
                         midInsns.add(new LdcInsnNode(payload0));
                         midInsns.add(new InsnNode(POP));
                         break;
                     case 1:
-                        // Strategy 1: StringBuilder concatenation
+
                         String p1 = pickPayload();
                         String p2 = pickPayload();
                         midInsns.add(new TypeInsnNode(NEW, "java/lang/StringBuilder"));
@@ -93,7 +91,7 @@ public class AntiPromptTransformer extends ClassTransformer {
                         midInsns.add(new InsnNode(POP));
                         break;
                     default:
-                        // Strategy 2: NOP + String creation
+
                         midInsns.add(new InsnNode(NOP));
                         midInsns.add(new TypeInsnNode(NEW, "java/lang/String"));
                         midInsns.add(new InsnNode(DUP));
@@ -108,7 +106,6 @@ public class AntiPromptTransformer extends ClassTransformer {
             }
         }
 
-        // Inject anti-prompt instructions at the end
         InsnList endInsns = new InsnList();
         endInsns.add(new TypeInsnNode(NEW, "java/lang/String"));
         endInsns.add(new InsnNode(DUP));
@@ -117,7 +114,6 @@ public class AntiPromptTransformer extends ClassTransformer {
                 "(Ljava/lang/String;)V", false));
         endInsns.add(new InsnNode(POP));
 
-        // Find last return instruction
         AbstractInsnNode lastInsn = methodNode.instructions.getLast();
         if (lastInsn != null) {
             methodNode.instructions.insertBefore(lastInsn, endInsns);

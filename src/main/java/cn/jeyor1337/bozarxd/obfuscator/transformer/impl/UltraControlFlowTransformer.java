@@ -17,67 +17,35 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
-/**
- * Ultra Control Flow Obfuscator - Global State Machine
- *
- * This is the most aggressive control flow obfuscation available.
- * It transforms the entire method into a state machine with:
- * 1. Global state variable controlling execution flow
- * 2. Lookup switch dispatch for all jumps
- * 3. Exception-based data transfer (optional)
- * 4. Fake state branches with dead code
- *
- * WARNING: This transformation is very aggressive and may:
- * - Significantly increase method size
- * - Impact performance
- * - Not work with methods containing try-catch blocks
- */
 public class UltraControlFlowTransformer extends ControlFlowTransformer {
 
     public UltraControlFlowTransformer(Bozar bozar) {
         super(bozar, "Ultra Control Flow", BozarCategory.ADVANCED);
     }
 
-    // ==================== Configuration Constants ====================
-
-    // Number of fake state branches to add
     private static final int FAKE_STATE_COUNT = 3;
 
-    // Probability of using exception-based state transfer
     private static final double EXCEPTION_TRANSFER_PROBABILITY = 0.30;
 
-    // Minimum method size to transform
     private static final int MIN_METHOD_SIZE = 20;
 
-    // Maximum method size to transform (avoid exceeding bytecode limits)
     private static final int MAX_METHOD_SIZE = 1500;
 
-    // Data carrier exception class name
     private static final String DATA_CARRIER_CLASS = "cn/jeyor1337/bozarxd/BozarDataCarrier";
-
-    // ==================== Class-Level State ====================
 
     private boolean dataCarrierCreated = false;
 
-    // ==================== Method-Level State ====================
-
-    // Maps labels to their assigned state keys
     private Map<LabelNode, Integer> labelToStateMap = new HashMap<>();
 
-    // State variable index
     private int stateVarIndex = 0;
 
-    // Frame analysis
     private Frame<BasicValue>[] frames = null;
 
-    // Fake state keys
     private List<Integer> fakeStateKeys = new ArrayList<>();
-
-    // ==================== Lifecycle Methods ====================
 
     @Override
     public void pre() {
-        // Create data carrier exception class if not exists
+
         if (!dataCarrierCreated) {
             createDataCarrierClass();
             dataCarrierCreated = true;
@@ -96,63 +64,48 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         if (!ASMUtils.isMethodEligibleToModify(classNode, methodNode)) return;
         if (!isMethodSuitable(classNode, methodNode)) return;
 
-        // Reset method-level state
         labelToStateMap.clear();
         fakeStateKeys.clear();
         frames = null;
 
         try {
-            // Analyze the method
+
             Analyzer<BasicValue> analyzer = new Analyzer<>(new BasicInterpreter());
             frames = analyzer.analyze(classNode.name, methodNode);
         } catch (AnalyzerException e) {
-            return; // Skip if analysis fails
+            return;
         }
 
-        // Collect all labels that are jump targets
         Set<LabelNode> jumpTargets = collectJumpTargets(methodNode);
         if (jumpTargets.isEmpty()) return;
 
-        // Check if all labels have empty stack - state machine only works in this case
         if (!allLabelsHaveEmptyStack(methodNode)) {
-            return; // Skip methods where labels have non-empty stacks
+            return;
         }
 
-        // Find next available local variable index
         stateVarIndex = findNextLocalIndex(methodNode);
 
-        // Assign state keys to all labels
         assignStateKeys(jumpTargets);
 
-        // Transform method to state machine
         rewriteAsStateMachine(classNode, methodNode, jumpTargets);
     }
 
-    // ==================== Suitability Check ====================
-
     private boolean isMethodSuitable(ClassNode classNode, MethodNode methodNode) {
-        // Skip small methods
+
         if (methodNode.instructions.size() < MIN_METHOD_SIZE) return false;
 
-        // Skip large methods
         if (methodNode.instructions.size() > MAX_METHOD_SIZE) return false;
 
-        // Skip special methods
         if (methodNode.name.equals("<init>") || methodNode.name.equals("<clinit>")) return false;
 
-        // Skip abstract/native methods
         if ((methodNode.access & (ACC_ABSTRACT | ACC_NATIVE | ACC_BRIDGE | ACC_SYNTHETIC)) != 0) return false;
 
-        // Skip methods with try-catch blocks (per user request)
         if (methodNode.tryCatchBlocks != null && !methodNode.tryCatchBlocks.isEmpty()) return false;
 
-        // Skip inner classes
         if (classNode.name.contains("$")) return false;
 
         return true;
     }
-
-    // ==================== Analysis Methods ====================
 
     private Set<LabelNode> collectJumpTargets(MethodNode methodNode) {
         Set<LabelNode> targets = new HashSet<>();
@@ -169,7 +122,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
             }
         }
 
-        // Also add the first label as a target (entry point)
         for (AbstractInsnNode insn : methodNode.instructions) {
             if (insn instanceof LabelNode label) {
                 targets.add(label);
@@ -180,15 +132,9 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         return targets;
     }
 
-    /**
-     * Check if all labels that are jump targets have empty stack state.
-     * State machine transformation only works when we can safely jump to labels
-     * without worrying about stack contents.
-     */
     private boolean allLabelsHaveEmptyStack(MethodNode methodNode) {
         if (frames == null || frames.length == 0) return false;
 
-        // Build label to index map
         Map<LabelNode, Integer> labelIndices = new HashMap<>();
         int index = 0;
         for (AbstractInsnNode insn : methodNode.instructions) {
@@ -198,7 +144,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
             index++;
         }
 
-        // Check all jump targets
         for (AbstractInsnNode insn : methodNode.instructions) {
             Set<LabelNode> targets = new HashSet<>();
 
@@ -217,7 +162,7 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
                 if (idx == null || idx >= frames.length) return false;
 
                 Frame<BasicValue> frame = frames[idx];
-                // If frame is null or stack is not empty, can't transform
+
                 if (frame == null || frame.getStackSize() > 0) {
                     return false;
                 }
@@ -244,7 +189,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
     private void assignStateKeys(Set<LabelNode> targets) {
         Set<Integer> usedKeys = new HashSet<>();
 
-        // Assign keys to real labels
         for (LabelNode label : targets) {
             int key;
             do {
@@ -254,7 +198,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
             labelToStateMap.put(label, key);
         }
 
-        // Generate fake state keys
         for (int i = 0; i < FAKE_STATE_COUNT; i++) {
             int fakeKey;
             do {
@@ -265,12 +208,9 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         }
     }
 
-    // ==================== State Machine Transformation ====================
-
     private void rewriteAsStateMachine(ClassNode classNode, MethodNode methodNode, Set<LabelNode> jumpTargets) {
         InsnList newInsns = new InsnList();
 
-        // Find the first label
         LabelNode firstLabel = null;
         for (AbstractInsnNode insn : methodNode.instructions) {
             if (insn instanceof LabelNode label && jumpTargets.contains(label)) {
@@ -281,27 +221,22 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
 
         if (firstLabel == null) return;
 
-        // Get start state
         Integer startState = labelToStateMap.get(firstLabel);
         if (startState == null) return;
 
-        // Create loop and switch labels
         LabelNode loopLabel = new LabelNode();
         LabelNode defaultLabel = new LabelNode();
 
-        // Build sorted keys and labels for switch
         List<Map.Entry<LabelNode, Integer>> sortedEntries = labelToStateMap.entrySet().stream()
             .sorted(Map.Entry.comparingByValue())
             .collect(Collectors.toList());
 
-        // Add fake states
         List<LabelNode> fakeLabels = new ArrayList<>();
         for (int fakeKey : fakeStateKeys) {
             LabelNode fakeLabel = new LabelNode();
             fakeLabels.add(fakeLabel);
         }
 
-        // Combine all entries (real + fake)
         List<Integer> allKeys = new ArrayList<>();
         List<LabelNode> allLabels = new ArrayList<>();
 
@@ -314,7 +249,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
             allLabels.add(fakeLabels.get(i));
         }
 
-        // Sort combined
         List<Integer> indices = new ArrayList<>();
         for (int i = 0; i < allKeys.size(); i++) indices.add(i);
         indices.sort(Comparator.comparingInt(allKeys::get));
@@ -322,45 +256,36 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         int[] sortedKeys = indices.stream().mapToInt(allKeys::get).toArray();
         LabelNode[] sortedLabels = indices.stream().map(allLabels::get).toArray(LabelNode[]::new);
 
-        // === Build new instructions ===
-
-        // Initialize state variable
         newInsns.add(ASMUtils.pushInt(startState));
         newInsns.add(new VarInsnNode(ISTORE, stateVarIndex));
 
-        // Loop start
         newInsns.add(loopLabel);
         newInsns.add(new VarInsnNode(ILOAD, stateVarIndex));
 
-        // Lookup switch
         newInsns.add(new LookupSwitchInsnNode(defaultLabel, sortedKeys, sortedLabels));
 
-        // Transform original instructions, replacing jumps with state updates
         for (AbstractInsnNode insn : methodNode.instructions) {
             if (insn instanceof LabelNode label) {
                 newInsns.add(label);
             } else if (insn instanceof JumpInsnNode jump) {
-                // Replace jump with state update + goto loop
+
                 newInsns.add(transformJumpInstruction(jump, loopLabel));
             } else if (insn instanceof LookupSwitchInsnNode || insn instanceof TableSwitchInsnNode) {
-                // Transform switch instructions
+
                 newInsns.add(transformSwitchInstruction(insn, loopLabel));
             } else {
                 newInsns.add(insn);
             }
         }
 
-        // Add fake state handlers
         for (LabelNode fakeLabel : fakeLabels) {
             newInsns.add(fakeLabel);
             newInsns.add(createFakeBranchCode());
         }
 
-        // Default handler (exception)
         newInsns.add(defaultLabel);
         newInsns.add(createExceptionThrow());
 
-        // Replace method instructions
         methodNode.instructions = newInsns;
         methodNode.maxLocals = Math.max(methodNode.maxLocals, stateVarIndex + 1);
     }
@@ -372,7 +297,7 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         Integer targetState = labelToStateMap.get(target);
 
         if (targetState == null) {
-            // Label not in our map, keep original
+
             insns.add(jump);
             return insns;
         }
@@ -380,9 +305,9 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         int opcode = jump.getOpcode();
 
         if (opcode == GOTO) {
-            // Unconditional jump: set state and goto loop
+
             if (ThreadLocalRandom.current().nextDouble() < EXCEPTION_TRANSFER_PROBABILITY) {
-                // Use exception-based transfer
+
                 insns.add(createExceptionBasedTransfer(targetState, loopLabel));
             } else {
                 insns.add(ASMUtils.pushInt(targetState));
@@ -390,17 +315,14 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
                 insns.add(new JumpInsnNode(GOTO, loopLabel));
             }
         } else {
-            // Conditional jump: branch sets state, fallthrough continues
+
             LabelNode trueLabel = new LabelNode();
             LabelNode continueLabel = new LabelNode();
 
-            // If condition true, jump to trueLabel
             insns.add(new JumpInsnNode(opcode, trueLabel));
 
-            // Fallthrough: continue to next instruction (don't change state)
             insns.add(new JumpInsnNode(GOTO, continueLabel));
 
-            // True branch: set state and goto loop
             insns.add(trueLabel);
             insns.add(ASMUtils.pushInt(targetState));
             insns.add(new VarInsnNode(ISTORE, stateVarIndex));
@@ -416,7 +338,7 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         InsnList result = new InsnList();
 
         if (insn instanceof LookupSwitchInsnNode lookup) {
-            // Transform each case to state update
+
             LabelNode[] newLabels = new LabelNode[lookup.labels.size()];
             for (int i = 0; i < lookup.labels.size(); i++) {
                 LabelNode oldLabel = lookup.labels.get(i);
@@ -436,7 +358,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
                 lookup.keys.stream().mapToInt(i -> i).toArray(),
                 newLabels));
 
-            // Add state update blocks for each case
             for (int i = 0; i < lookup.labels.size(); i++) {
                 LabelNode oldLabel = lookup.labels.get(i);
                 Integer state = labelToStateMap.get(oldLabel);
@@ -448,7 +369,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
                 }
             }
 
-            // Default case
             Integer defaultState = labelToStateMap.get(lookup.dflt);
             if (defaultState != null) {
                 result.add(newDefault);
@@ -457,25 +377,21 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
                 result.add(new JumpInsnNode(GOTO, loopLabel));
             }
         } else {
-            // TableSwitch - similar transformation
+
             result.add(insn);
         }
 
         return result;
     }
 
-    // ==================== Exception-Based Data Transfer ====================
-
     private void createDataCarrierClass() {
         ClassNode carrierClass = new ClassNode();
         carrierClass.visit(V1_8, ACC_PUBLIC | ACC_SUPER, DATA_CARRIER_CLASS,
             null, "java/lang/RuntimeException", null);
 
-        // Add state field
         carrierClass.fields.add(new FieldNode(
             ACC_PUBLIC, "state", "I", null, null));
 
-        // Add constructor: public BozarDataCarrier(int state)
         MethodNode initMethod = new MethodNode(ACC_PUBLIC, "<init>", "(I)V", null, null);
         initMethod.instructions.add(new VarInsnNode(ALOAD, 0));
         initMethod.instructions.add(new MethodInsnNode(INVOKESPECIAL,
@@ -489,7 +405,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         initMethod.maxLocals = 2;
         carrierClass.methods.add(initMethod);
 
-        // Add default constructor
         MethodNode defaultInit = new MethodNode(ACC_PUBLIC, "<init>", "()V", null, null);
         defaultInit.instructions.add(new VarInsnNode(ALOAD, 0));
         defaultInit.instructions.add(new MethodInsnNode(INVOKESPECIAL,
@@ -509,7 +424,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         LabelNode tryEnd = new LabelNode();
         LabelNode handler = new LabelNode();
 
-        // Try block: throw exception with state
         insns.add(tryStart);
         insns.add(new TypeInsnNode(NEW, DATA_CARRIER_CLASS));
         insns.add(new InsnNode(DUP));
@@ -519,26 +433,18 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
         insns.add(new InsnNode(ATHROW));
         insns.add(tryEnd);
 
-        // Handler: extract state and goto loop
         insns.add(handler);
         insns.add(new TypeInsnNode(CHECKCAST, DATA_CARRIER_CLASS));
         insns.add(new FieldInsnNode(GETFIELD, DATA_CARRIER_CLASS, "state", "I"));
         insns.add(new VarInsnNode(ISTORE, stateVarIndex));
         insns.add(new JumpInsnNode(GOTO, loopLabel));
 
-        // Note: TryCatchBlockNode needs to be added to method separately
-        // For now, we'll use direct state transfer as the exception mechanism
-        // adds complexity to method's tryCatchBlocks
-
-        // Simplified: just use direct transfer
         InsnList simpleInsns = new InsnList();
         simpleInsns.add(ASMUtils.pushInt(targetState));
         simpleInsns.add(new VarInsnNode(ISTORE, stateVarIndex));
         simpleInsns.add(new JumpInsnNode(GOTO, loopLabel));
         return simpleInsns;
     }
-
-    // ==================== Fake Branch Code ====================
 
     private InsnList createFakeBranchCode() {
         InsnList insns = new InsnList();
@@ -587,8 +493,6 @@ public class UltraControlFlowTransformer extends ControlFlowTransformer {
 
         return insns;
     }
-
-    // ==================== Configuration ====================
 
     @Override
     public BozarConfig.EnableType getEnableType() {

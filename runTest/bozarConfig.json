@@ -17,8 +17,8 @@
     "crasher": false,
     "constantObfuscation": "Super",
     "antiPrompt": false,
-    "invokeDynamic": false,
-    "paramObfuscation": "Basic",
+    "invokeDynamic": true,
+    "paramObfuscation": "Light",
     "watermarkOptions": {
       "dummyClass": false,
       "textInsideClass": false,

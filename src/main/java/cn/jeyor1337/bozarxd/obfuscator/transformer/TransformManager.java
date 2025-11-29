@@ -43,44 +43,34 @@ public class TransformManager {
     public static List<Class<? extends ClassTransformer>> getTransformers() {
         final var transformers = new ArrayList<Class<? extends ClassTransformer>>();
 
-        // Phase 1: Renaming (must be first - executed separately in transformAll)
         transformers.add(ClassRenamerTransformer.class);
         transformers.add(FieldRenamerTransformer.class);
         transformers.add(MethodRenamerTransformer.class);
 
-        // Phase 2: Information removal (pure metadata removal, no logic changes)
         transformers.add(LocalVariableTransformer.class);
         transformers.add(LineNumberTransformer.class);
         transformers.add(SourceFileTransformer.class);
 
-        // Phase 3: Structure adjustments (class structure modifications)
         transformers.add(InnerClassTransformer.class);
         transformers.add(ShuffleTransformer.class);
         transformers.add(BadAnnoTransformer.class);
 
-        // Phase 4: Constant obfuscation (strings and numbers)
         transformers.add(ConstantTransformer.class);
 
-        // Phase 5: Advanced transformations (method signature and call modifications)
         transformers.add(AntiPromptTransformer.class);
-        transformers.add(ParamObfTransformer.class);      // CRITICAL: Must be before InvokeDynamic
-        transformers.add(InvokeDynamicTransformer.class); // CRITICAL: Must be after ParamObf
+        transformers.add(ParamObfTransformer.class);
+        transformers.add(InvokeDynamicTransformer.class);
 
-        // Phase 6: Control flow obfuscation (maximize analysis difficulty)
-        // Applied late to maximize complexity after all other transformations
         transformers.add(LightControlFlowTransformer.class);
         transformers.add(HeavyControlFlowTransformer.class);
         transformers.add(SuperControlFlowTransformer.class);
         transformers.add(UltraControlFlowTransformer.class);
 
-        // Phase 7: Crashers and watermarks (final touches)
         transformers.add(CrasherTransformer.class);
         transformers.add(DummyClassTransformer.class);
         transformers.add(TextInsideClassTransformer.class);
         transformers.add(UnusedStringTransformer.class);
         transformers.add(ZipCommentTransformer.class);
-
-        // TODO: AntiDebugTransformer
 
         return transformers;
     }
@@ -95,7 +85,7 @@ public class TransformManager {
     }
 
     public void transformAll() {
-        // Apply renamer transformers
+
         var map = new HashMap<String, String>();
         this.classTransformers.stream()
                 .filter(ClassTransformer::isEnabled)
@@ -108,7 +98,6 @@ public class TransformManager {
                     map.putAll(crt.map);
                 });
 
-        // Remap classes
         if(this.bozar.getConfig().getOptions().getRename() != BozarConfig.BozarOptions.RenameOption.OFF) {
             this.bozar.log("Applying renamer...");
             var reMapper = new SimpleRemapper(map);
@@ -121,12 +110,10 @@ public class TransformManager {
             }
         }
 
-        // Pre
         this.classTransformers.stream()
                 .filter(ClassTransformer::isEnabled)
                 .forEach(ClassTransformer::pre);
 
-        // Transform all classes
         this.classTransformers.stream()
             .filter(ClassTransformer::isEnabled)
             .filter(ct -> !(ct instanceof RenamerTransformer))
@@ -136,7 +123,6 @@ public class TransformManager {
                 this.bozar.getResources().forEach(ct::transformResource);
         });
 
-        // Post
         this.classTransformers.stream()
                 .filter(ClassTransformer::isEnabled)
                 .forEach(ClassTransformer::post);
@@ -156,7 +142,6 @@ public class TransformManager {
             AbstractInsnNode[] insns = methodNode.instructions.toArray().clone();
             classTransformer.transformMethod(classNode, methodNode);
 
-            // Revert changes if method size is invalid
             if (!ASMUtils.isMethodSizeValid(methodNode)) {
                 this.bozar.log("Cannot apply \"%s\" on \"%s\" due to low method capacity", classTransformer.getName(), classNode.name + "." + methodNode.name + methodNode.desc);
                 methodNode.instructions = ASMUtils.arrayToList(insns);
@@ -164,7 +149,7 @@ public class TransformManager {
         });
     }
 
-    @SuppressWarnings("unchecked") // Checked using stream
+    @SuppressWarnings("unchecked")
     public <T extends ClassTransformer> T getClassTransformer(Class<T> transformerClass) {
         if(transformerClass == null)
             throw new NullPointerException("transformerClass cannot be null");

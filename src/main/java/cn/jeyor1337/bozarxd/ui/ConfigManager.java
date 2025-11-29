@@ -27,7 +27,7 @@ public class ConfigManager {
     public void loadConfig(File file) throws IOException {
         String str = Files.readString(file.toPath());
         try {
-            // Deserializer for input/output file
+
             JsonDeserializer<BozarConfig> deserializer = (jsonElement, type, jsonDeserializationContext) -> {
                 try {
                     BozarConfig bozarConfig = new Gson().fromJson(jsonElement, BozarConfig.class);
@@ -41,7 +41,6 @@ public class ConfigManager {
                 }
             };
 
-            // Load config
             BozarConfig bozarConfig = new GsonBuilder()
                     .registerTypeAdapter(BozarConfig.class, deserializer)
                     .create()
@@ -62,7 +61,6 @@ public class ConfigManager {
         c.exclude.setText(bozarConfig.getExclude());
         c.libraries.getItems().addAll(bozarConfig.getLibraries());
 
-        // Obfuscation options
         c.getComboBox(LineNumberTransformer.class).getSelectionModel().select(BozarUtils.getSerializedName(bozarConfig.getOptions().getLineNumbers()));
         c.getComboBox(LocalVariableTransformer.class).getSelectionModel().select(BozarUtils.getSerializedName(bozarConfig.getOptions().getLocalVariables()));
         c.getComboBox(ClassRenamerTransformer.class).getSelectionModel().select(BozarUtils.getSerializedName(bozarConfig.getOptions().getRename()));
@@ -75,7 +73,6 @@ public class ConfigManager {
         c.getCheckBox(AntiPromptTransformer.class).setSelected(bozarConfig.getOptions().isAntiPrompt());
         c.getCheckBox(InvokeDynamicTransformer.class).setSelected(bozarConfig.getOptions().isInvokeDynamic());
 
-        // Watermark options
         c.getCheckBox(DummyClassTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isDummyClass());
         c.getCheckBox(TextInsideClassTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isTextInsideClass());
         c.getCheckBox(UnusedStringTransformer.class).setSelected(bozarConfig.getOptions().getWatermarkOptions().isLdcPop());
@@ -91,7 +88,7 @@ public class ConfigManager {
 
     public void saveConfig(BozarConfig bozarConfig) throws IOException {
         try (FileWriter fw = new FileWriter("bozarConfig.json")) {
-            // Serializer for input/output file
+
             JsonSerializer<BozarConfig> serializer = (cfg, type, jsonSerializationContext) -> {
                 JsonObject jsonObject = new JsonObject();
                 jsonObject.add("input", new JsonPrimitive(cfg.getInput().getAbsolutePath()));
@@ -101,7 +98,6 @@ public class ConfigManager {
                 return jsonObject;
             };
 
-            // Write config
             fw.write(new GsonBuilder()
                     .registerTypeAdapter(BozarConfig.class, serializer)
                     .setPrettyPrinting()
@@ -159,13 +155,9 @@ public class ConfigManager {
             this.loadConfig(f);
     }
 
-    /**
-     * Load configuration from file without a Controller instance (for CLI mode)
-     */
     public static BozarConfig loadConfigStatic(File file) throws IOException {
         String str = Files.readString(file.toPath());
 
-        // Deserializer for input/output file
         JsonDeserializer<BozarConfig> deserializer = (jsonElement, type, jsonDeserializationContext) -> {
             try {
                 BozarConfig bozarConfig = new Gson().fromJson(jsonElement, BozarConfig.class);
@@ -179,7 +171,6 @@ public class ConfigManager {
             }
         };
 
-        // Load config
         BozarConfig bozarConfig = new GsonBuilder()
                 .registerTypeAdapter(BozarConfig.class, deserializer)
                 .create()
@@ -192,38 +183,34 @@ public class ConfigManager {
         return bozarConfig;
     }
 
-    /**
-     * Create a default configuration with minimal settings (for CLI mode)
-     */
     public static BozarConfig createDefaultConfig(String inputPath, String outputPath) {
-        // Create default watermark options (all disabled)
+
         BozarConfig.BozarOptions.WatermarkOptions watermarkOptions = new BozarConfig.BozarOptions.WatermarkOptions(
-                false,  // dummyClass
-                false,  // textInsideClass
-                false,  // ldcPop
-                false,  // zipComment
-                false,  // badAnno
-                "",     // dummyClassText
-                "",     // textInsideClassText
-                "",     // ldcPopText
-                "",     // zipCommentText
-                ""      // badAnnoText
+                false,
+                false,
+                false,
+                false,
+                false,
+                "",
+                "",
+                "",
+                "",
+                ""
         );
 
-        // Create default obfuscation options
         BozarConfig.BozarOptions bozarOptions = new BozarConfig.BozarOptions(
-                BozarConfig.BozarOptions.RenameOption.ALPHABET,  // rename
-                BozarConfig.BozarOptions.LineNumberOption.DELETE,  // lineNumbers
-                BozarConfig.BozarOptions.LocalVariableOption.DELETE,  // localVariables
-                true,   // removeSourceFile
-                true,   // shuffle
-                true,   // removeInnerClasses
-                BozarConfig.BozarOptions.ControlFlowObfuscationOption.LIGHT,  // controlFlowObfuscation
-                false,  // crasher
-                BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,  // constantObfuscation
-                false,  // antiPrompt
-                false,  // invokeDynamic
-                BozarConfig.BozarOptions.ParamObfuscationOption.OFF,  // paramObfuscation
+                BozarConfig.BozarOptions.RenameOption.ALPHABET,
+                BozarConfig.BozarOptions.LineNumberOption.DELETE,
+                BozarConfig.BozarOptions.LocalVariableOption.DELETE,
+                true,
+                true,
+                true,
+                BozarConfig.BozarOptions.ControlFlowObfuscationOption.LIGHT,
+                false,
+                BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,
+                false,
+                false,
+                BozarConfig.BozarOptions.ParamObfuscationOption.OFF,
                 watermarkOptions
         );
 
@@ -236,43 +223,37 @@ public class ConfigManager {
         );
     }
 
-    /**
-     * Generate a template configuration file with default settings
-     * This is a static method so it can be called without a Controller instance
-     */
     public static void generateTemplateConfig() throws IOException {
-        // Create default watermark options
+
         BozarConfig.BozarOptions.WatermarkOptions watermarkOptions = new BozarConfig.BozarOptions.WatermarkOptions(
-                false,  // dummyClass
-                false,  // textInsideClass
-                false,  // ldcPop
-                false,  // zipComment
-                false,  // badAnno
-                "BozarXD",  // dummyClassText
-                "Obfuscated by BozarXD",  // textInsideClassText
-                "BozarXD Watermark",  // ldcPopText
-                "Protected by BozarXD",  // zipCommentText
-                "BozarXD"  // badAnnoText
+                false,
+                false,
+                false,
+                false,
+                false,
+                "BozarXD",
+                "Obfuscated by BozarXD",
+                "BozarXD Watermark",
+                "Protected by BozarXD",
+                "BozarXD"
         );
 
-        // Create default obfuscation options
         BozarConfig.BozarOptions bozarOptions = new BozarConfig.BozarOptions(
-                BozarConfig.BozarOptions.RenameOption.ALPHABET,  // rename
-                BozarConfig.BozarOptions.LineNumberOption.DELETE,  // lineNumbers
-                BozarConfig.BozarOptions.LocalVariableOption.DELETE,  // localVariables
-                true,   // removeSourceFile
-                true,   // shuffle
-                true,   // removeInnerClasses
-                BozarConfig.BozarOptions.ControlFlowObfuscationOption.LIGHT,  // controlFlowObfuscation
-                false,  // crasher
-                BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,  // constantObfuscation
-                false,  // antiPrompt
-                false,  // invokeDynamic
-                BozarConfig.BozarOptions.ParamObfuscationOption.LIGHT,  // paramObfuscation (Light as default in template)
+                BozarConfig.BozarOptions.RenameOption.ALPHABET,
+                BozarConfig.BozarOptions.LineNumberOption.DELETE,
+                BozarConfig.BozarOptions.LocalVariableOption.DELETE,
+                true,
+                true,
+                true,
+                BozarConfig.BozarOptions.ControlFlowObfuscationOption.LIGHT,
+                false,
+                BozarConfig.BozarOptions.ConstantObfuscationOption.LIGHT,
+                false,
+                false,
+                BozarConfig.BozarOptions.ParamObfuscationOption.LIGHT,
                 watermarkOptions
         );
 
-        // Create template config with example values
         BozarConfig templateConfig = new BozarConfig(
                 "input.jar",
                 "output.jar",
@@ -281,7 +262,6 @@ public class ConfigManager {
                 bozarOptions
         );
 
-        // Serialize and save to file
         try (FileWriter fw = new FileWriter("bozarConfig.json")) {
             JsonSerializer<BozarConfig> serializer = (cfg, type, jsonSerializationContext) -> {
                 JsonObject jsonObject = new JsonObject();

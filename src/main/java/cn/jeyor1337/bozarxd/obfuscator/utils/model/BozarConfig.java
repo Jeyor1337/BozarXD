@@ -71,7 +71,6 @@ public class BozarConfig {
             @SerializedName("Heavy") HEAVY
         }
 
-        // Obfuscation options
         private final RenameOption rename;
         private final LineNumberOption lineNumbers;
         private final LocalVariableOption localVariables;

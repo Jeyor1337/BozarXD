@@ -8,20 +8,15 @@ import org.apache.commons.cli.*;
 import java.io.File;
 import java.io.IOException;
 
-/**
- * Main entry point for BozarXD obfuscator
- * Handles both GUI and CLI modes with proper JavaFX environment detection
- */
 public class Main {
 
     public static void main(String[] args) {
-        // Parse command line arguments first
+
         CommandLineParser parser = new DefaultParser();
         try {
             Options options = getOptions();
             CommandLine cmd = parser.parse(options, args);
 
-            // Handle init command - generate template config
             if(cmd.hasOption("init")) {
                 System.out.println("Generating template configuration file...");
                 try {
@@ -40,11 +35,9 @@ public class Main {
                 return;
             }
 
-            // Handle console mode without GUI
             if(cmd.hasOption("console")) {
                 System.out.println("[BozarXD] Running in console mode...");
 
-                // Load or generate config
                 BozarConfig config;
                 try {
                     if(cmd.hasOption("config")) {
@@ -55,7 +48,7 @@ public class Main {
                         }
                         config = ConfigManager.loadConfigStatic(configFile);
                     } else if(cmd.hasOption("input") && cmd.hasOption("output")) {
-                        // Create minimal config from command line
+
                         String input = cmd.getOptionValue("input");
                         String output = cmd.getOptionValue("output");
                         config = ConfigManager.createDefaultConfig(input, output);
@@ -73,13 +66,11 @@ public class Main {
                     return;
                 }
 
-                // Validate input file exists
                 if(!config.getInput().exists()) {
                     System.err.println("Input file not found: " + config.getInput().getAbsolutePath());
                     System.exit(1);
                 }
 
-                // Run obfuscation
                 System.out.println("[BozarXD] Initializing Bozar...");
                 Bozar bozar = new Bozar(config);
                 System.out.println("[BozarXD] Executing Bozar...");
@@ -87,20 +78,18 @@ public class Main {
                 return;
             }
 
-            // Try to launch JavaFX application for GUI mode
             try {
-                // First check if JavaFX is available
+
                 Class.forName("javafx.application.Application");
 
-                // JavaFX is available, load and launch the App
                 Class<?> appClass = Class.forName("cn.jeyor1337.bozarxd.ui.App");
                 var method = appClass.getMethod("main", String[].class);
                 method.invoke(null, (Object) args);
             } catch (ClassNotFoundException e) {
-                // JavaFX not available
+
                 showCliHelp();
             } catch (Exception e) {
-                // JavaFX environment error
+
                 System.err.println("JavaFX environment not available: " + e.getMessage());
                 showCliHelp();
                 System.exit(1);

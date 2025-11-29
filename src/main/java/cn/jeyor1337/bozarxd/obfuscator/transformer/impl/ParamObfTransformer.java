@@ -9,38 +9,22 @@ import org.objectweb.asm.tree.*;
 
 import java.util.*;
 
-/**
- * Parameter Obfuscation Transformer
- *
- * Uses a bridge method pattern to maintain compatibility with external callers:
- * - Original method signature is preserved as a bridge that forwards to the obfuscated method
- * - A new private method with extended parameters contains the actual logic
- * - Magic values are used instead of zeros to increase obfuscation strength
- * - Opaque predicates using the extra parameters add complexity
- * - Parameter order is shuffled to further increase obfuscation
- *
- * Example: foo(int a, String b) -> foo$xxx(long m1, String b, int m2, int a, int m3)
- * The original parameters are mixed with fake parameters in random order.
- */
 public class ParamObfTransformer extends ClassTransformer {
 
     private static final int MIN_EXTRA_PARAMS = 2;
     private static final int MAX_EXTRA_PARAMS = 4;
 
-    // Represents a parameter in the shuffled list
     private static class ParamEntry {
         final Type type;
-        final int originalIndex;  // -1 for fake params, >= 0 for original params
-        final int magicValue;     // Only used for fake params
+        final int originalIndex;
+        final int magicValue;
 
-        // Constructor for original parameter
         ParamEntry(Type type, int originalIndex) {
             this.type = type;
             this.originalIndex = originalIndex;
             this.magicValue = 0;
         }
 
-        // Constructor for fake parameter
         ParamEntry(Type type, int magicValue, boolean isFake) {
             this.type = type;
             this.originalIndex = -1;
@@ -52,12 +36,11 @@ public class ParamObfTransformer extends ClassTransformer {
         }
     }
 
-    // Data class to hold obfuscation info for each method
     private static class MethodObfData {
         final String obfMethodName;
         final String obfMethodDesc;
-        final List<ParamEntry> shuffledParams;  // All params in shuffled order
-        final int[] originalToShuffledIndex;    // Maps original param index -> shuffled index
+        final List<ParamEntry> shuffledParams;
+        final int[] originalToShuffledIndex;
         final int expectedXor;
         final boolean isStatic;
 
@@ -72,9 +55,8 @@ public class ParamObfTransformer extends ClassTransformer {
         }
     }
 
-    // Map: className -> (methodName + desc -> MethodObfData)
     private final Map<String, Map<String, MethodObfData>> classMethodMap = new HashMap<>();
-    // Track methods to be processed in post phase
+
     private final Map<String, List<MethodNode>> methodsToProcess = new HashMap<>();
 
     public ParamObfTransformer(Bozar bozar) {
@@ -83,7 +65,7 @@ public class ParamObfTransformer extends ClassTransformer {
 
     @Override
     public void pre() {
-        // First pass: analyze all methods and prepare obfuscation data
+
         for (ClassNode classNode : this.getBozar().getClasses()) {
             Map<String, MethodObfData> methodMap = new HashMap<>();
 
@@ -109,7 +91,7 @@ public class ParamObfTransformer extends ClassTransformer {
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
         Map<String, MethodObfData> methodMap = classMethodMap.get(classNode.name);
         if (methodMap == null) {
-            // Still need to update calls to obfuscated methods in other classes
+
             updateMethodCalls(classNode, methodNode);
             return;
         }
@@ -118,17 +100,16 @@ public class ParamObfTransformer extends ClassTransformer {
         MethodObfData obfData = methodMap.get(methodKey);
 
         if (obfData != null) {
-            // This method will be converted to a bridge - mark for processing in post()
+
             methodsToProcess.computeIfAbsent(classNode.name, k -> new ArrayList<>()).add(methodNode);
         }
 
-        // Update calls to obfuscated methods
         updateMethodCalls(classNode, methodNode);
     }
 
     @Override
     public void post() {
-        // Process all marked methods: create obfuscated versions and convert originals to bridges
+
         for (ClassNode classNode : this.getBozar().getClasses()) {
             List<MethodNode> methods = methodsToProcess.get(classNode.name);
             if (methods == null) continue;
@@ -143,18 +124,15 @@ public class ParamObfTransformer extends ClassTransformer {
                 MethodObfData obfData = methodMap.get(methodKey);
                 if (obfData == null) continue;
 
-                // Create the new obfuscated method with actual logic
                 MethodNode obfMethod = createObfuscatedMethod(classNode, originalMethod, obfData);
                 newMethods.add(obfMethod);
 
-                // Convert original method to bridge
                 convertToBridge(classNode, originalMethod, obfData);
 
                 this.getBozar().log("Created bridge method %s.%s -> %s",
                     classNode.name, originalMethod.name, obfData.obfMethodName);
             }
 
-            // Add all new methods to the class
             classNode.methods.addAll(newMethods);
         }
     }
@@ -173,27 +151,23 @@ public class ParamObfTransformer extends ClassTransformer {
             MethodObfData obfData = targetMethodMap.get(callKey);
             if (obfData == null) continue;
 
-            // Check if this is an internal call that should use the obfuscated method directly
             if (isInternalCall(classNode, methodNode, methodInsn)) {
-                // Reorder arguments on stack and add magic values
+
                 reorderCallArguments(methodNode, methodInsn, obfData);
                 methodInsn.name = obfData.obfMethodName;
                 methodInsn.desc = obfData.obfMethodDesc;
             }
-            // External calls will use the bridge method (original signature) - no change needed
+
         }
     }
 
     private void reorderCallArguments(MethodNode callerMethod, MethodInsnNode callInsn, MethodObfData obfData) {
-        // We need to reorder arguments that are already on the stack
-        // Original stack: [this?], arg0, arg1, arg2, ...
-        // Target stack: [this?], shuffled_arg0, shuffled_arg1, ...
 
         Type[] originalArgs = Type.getArgumentTypes(callInsn.desc);
         int originalArgCount = originalArgs.length;
 
         if (originalArgCount == 0) {
-            // No original args, just push magic values in shuffled order
+
             InsnList insertList = new InsnList();
             for (ParamEntry entry : obfData.shuffledParams) {
                 if (entry.isFake()) {
@@ -207,17 +181,11 @@ public class ParamObfTransformer extends ClassTransformer {
             return;
         }
 
-        // For methods with original arguments, we need to:
-        // 1. Store all original args to temp locals
-        // 2. Push args in shuffled order (including magic values)
-
         InsnList preInsns = new InsnList();
         InsnList pushInsns = new InsnList();
 
-        // Find a safe starting index for temp variables
         int tempVarBase = callerMethod.maxLocals;
 
-        // Calculate size needed for original args
         int[] originalArgOffsets = new int[originalArgCount];
         int tempOffset = 0;
         for (int i = 0; i < originalArgCount; i++) {
@@ -225,33 +193,29 @@ public class ParamObfTransformer extends ClassTransformer {
             tempOffset += originalArgs[i].getSize();
         }
 
-        // Store original args in reverse order (they're on stack in order)
         for (int i = originalArgCount - 1; i >= 0; i--) {
             Type argType = originalArgs[i];
             int storeIndex = tempVarBase + originalArgOffsets[i];
             preInsns.add(new VarInsnNode(argType.getOpcode(ISTORE), storeIndex));
         }
 
-        // Push args in shuffled order
         for (ParamEntry entry : obfData.shuffledParams) {
             if (entry.isFake()) {
-                // Push magic value
+
                 pushInsns.add(pushIntValue(entry.magicValue));
                 if (entry.type.getSort() == Type.LONG) {
                     pushInsns.add(new InsnNode(I2L));
                 }
             } else {
-                // Load original arg from temp storage
+
                 int loadIndex = tempVarBase + originalArgOffsets[entry.originalIndex];
                 pushInsns.add(new VarInsnNode(entry.type.getOpcode(ILOAD), loadIndex));
             }
         }
 
-        // Insert instructions
         callerMethod.instructions.insertBefore(callInsn, preInsns);
         callerMethod.instructions.insertBefore(callInsn, pushInsns);
 
-        // Update maxLocals if needed
         int tempVarsNeeded = tempOffset;
         if (callerMethod.maxLocals < tempVarBase + tempVarsNeeded) {
             callerMethod.maxLocals = tempVarBase + tempVarsNeeded;
@@ -259,35 +223,30 @@ public class ParamObfTransformer extends ClassTransformer {
     }
 
     private boolean isInternalCall(ClassNode classNode, MethodNode callerMethod, MethodInsnNode callInsn) {
-        // Same class call - definitely internal
+
         if (callInsn.owner.equals(classNode.name)) {
             return true;
         }
 
-        // Cross-class call within obfuscated classes - also internal
         return classMethodMap.containsKey(callInsn.owner);
     }
 
     private MethodObfData createObfuscationData(ClassNode classNode, MethodNode methodNode) {
-        // Generate unique obfuscated method name
+
         String obfMethodName = generateObfMethodName(classNode, methodNode.name);
         boolean isStatic = (methodNode.access & ACC_STATIC) != 0;
 
         Type[] originalArgs = Type.getArgumentTypes(methodNode.desc);
         int originalArgCount = originalArgs.length;
 
-        // Random number of extra parameters
         int extraParamCount = MIN_EXTRA_PARAMS + random.nextInt(MAX_EXTRA_PARAMS - MIN_EXTRA_PARAMS + 1);
 
-        // Create all param entries
         List<ParamEntry> allParams = new ArrayList<>();
 
-        // Add original parameters
         for (int i = 0; i < originalArgCount; i++) {
             allParams.add(new ParamEntry(originalArgs[i], i));
         }
 
-        // Add fake parameters with magic values
         int xorResult = 0;
         for (int i = 0; i < extraParamCount; i++) {
             Type type = random.nextBoolean() ? Type.INT_TYPE : Type.LONG_TYPE;
@@ -296,11 +255,9 @@ public class ParamObfTransformer extends ClassTransformer {
             xorResult ^= magicValue;
         }
 
-        // Shuffle all parameters
         List<ParamEntry> shuffledParams = new ArrayList<>(allParams);
         Collections.shuffle(shuffledParams, random);
 
-        // Build mapping from original index to shuffled index
         int[] originalToShuffledIndex = new int[originalArgCount];
         for (int shuffledIdx = 0; shuffledIdx < shuffledParams.size(); shuffledIdx++) {
             ParamEntry entry = shuffledParams.get(shuffledIdx);
@@ -309,7 +266,6 @@ public class ParamObfTransformer extends ClassTransformer {
             }
         }
 
-        // Build new descriptor
         String obfMethodDesc = buildShuffledDescriptor(shuffledParams, Type.getReturnType(methodNode.desc));
 
         return new MethodObfData(obfMethodName, obfMethodDesc, shuffledParams,
@@ -319,7 +275,6 @@ public class ParamObfTransformer extends ClassTransformer {
     private String generateObfMethodName(ClassNode classNode, String originalName) {
         String baseName = originalName + "$" + Integer.toHexString(random.nextInt(0xFFFF));
 
-        // Ensure unique name
         Set<String> existingNames = new HashSet<>();
         for (MethodNode m : classNode.methods) {
             existingNames.add(m.name);
@@ -344,7 +299,7 @@ public class ParamObfTransformer extends ClassTransformer {
     }
 
     private MethodNode createObfuscatedMethod(ClassNode classNode, MethodNode originalMethod, MethodObfData obfData) {
-        // Create new method node with shuffled descriptor
+
         MethodNode obfMethod = new MethodNode(
             ACC_PRIVATE | ACC_SYNTHETIC | (originalMethod.access & ACC_STATIC),
             obfData.obfMethodName,
@@ -353,14 +308,9 @@ public class ParamObfTransformer extends ClassTransformer {
             originalMethod.exceptions != null ? originalMethod.exceptions.toArray(new String[0]) : null
         );
 
-        // Build variable index remapping
-        // Original: [this?], param0, param1, ... , local0, local1, ...
-        // New: [this?], shuffled0, shuffled1, ... , local0, local1, ...
-
         Type[] originalArgs = Type.getArgumentTypes(originalMethod.desc);
         int thisOffset = obfData.isStatic ? 0 : 1;
 
-        // Calculate original param var indices
         int[] originalParamVarIndex = new int[originalArgs.length];
         int varIdx = thisOffset;
         for (int i = 0; i < originalArgs.length; i++) {
@@ -369,7 +319,6 @@ public class ParamObfTransformer extends ClassTransformer {
         }
         int originalLocalsStart = varIdx;
 
-        // Calculate new param var indices based on shuffled order
         int[] newParamVarIndex = new int[obfData.shuffledParams.size()];
         varIdx = thisOffset;
         for (int i = 0; i < obfData.shuffledParams.size(); i++) {
@@ -378,37 +327,29 @@ public class ParamObfTransformer extends ClassTransformer {
         }
         int newLocalsStart = varIdx;
 
-        // Build mapping: original var index -> new var index
         Map<Integer, Integer> varIndexMap = new HashMap<>();
 
-        // Map 'this' if not static
         if (!obfData.isStatic) {
             varIndexMap.put(0, 0);
         }
 
-        // Map original parameters to their new positions
         for (int origIdx = 0; origIdx < originalArgs.length; origIdx++) {
             int shuffledIdx = obfData.originalToShuffledIndex[origIdx];
             int oldVarIdx = originalParamVarIndex[origIdx];
             int newVarIdx = newParamVarIndex[shuffledIdx];
             varIndexMap.put(oldVarIdx, newVarIdx);
 
-            // For wide types (long/double), also map the second slot
             if (originalArgs[origIdx].getSize() == 2) {
                 varIndexMap.put(oldVarIdx + 1, newVarIdx + 1);
             }
         }
 
-        // Map local variables (shift by the difference in locals start)
         int localsShift = newLocalsStart - originalLocalsStart;
 
-        // Copy instructions with remapped variable indices
         InsnList newInsns = new InsnList();
 
-        // Add opaque predicate at the beginning
         newInsns.add(generateOpaquePredicate(obfData, newParamVarIndex));
 
-        // Clone labels first
         Map<LabelNode, LabelNode> labelMap = new HashMap<>();
         for (AbstractInsnNode insn : originalMethod.instructions) {
             if (insn instanceof LabelNode) {
@@ -416,17 +357,15 @@ public class ParamObfTransformer extends ClassTransformer {
             }
         }
 
-        // Copy and remap instructions
         for (AbstractInsnNode insn : originalMethod.instructions) {
             AbstractInsnNode cloned = insn.clone(labelMap);
 
-            // Remap variable indices
             if (cloned instanceof VarInsnNode) {
                 VarInsnNode varInsn = (VarInsnNode) cloned;
                 if (varIndexMap.containsKey(varInsn.var)) {
                     varInsn.var = varIndexMap.get(varInsn.var);
                 } else if (varInsn.var >= originalLocalsStart) {
-                    // Local variable - shift it
+
                     varInsn.var += localsShift;
                 }
             } else if (cloned instanceof IincInsnNode) {
@@ -443,7 +382,6 @@ public class ParamObfTransformer extends ClassTransformer {
 
         obfMethod.instructions = newInsns;
 
-        // Update method attributes
         int fakeParamsSize = 0;
         for (ParamEntry entry : obfData.shuffledParams) {
             if (entry.isFake()) {
@@ -453,7 +391,6 @@ public class ParamObfTransformer extends ClassTransformer {
         obfMethod.maxStack = originalMethod.maxStack + 10;
         obfMethod.maxLocals = originalMethod.maxLocals + fakeParamsSize + localsShift;
 
-        // Copy and remap local variables
         if (originalMethod.localVariables != null) {
             obfMethod.localVariables = new ArrayList<>();
             for (LocalVariableNode lvn : originalMethod.localVariables) {
@@ -473,7 +410,6 @@ public class ParamObfTransformer extends ClassTransformer {
             }
         }
 
-        // Copy try-catch blocks
         if (originalMethod.tryCatchBlocks != null) {
             obfMethod.tryCatchBlocks = new ArrayList<>();
             for (TryCatchBlockNode tcb : originalMethod.tryCatchBlocks) {
@@ -494,7 +430,6 @@ public class ParamObfTransformer extends ClassTransformer {
 
         LabelNode continueLabel = new LabelNode();
 
-        // Load and XOR all fake (magic) parameters
         boolean first = true;
         for (int i = 0; i < obfData.shuffledParams.size(); i++) {
             ParamEntry entry = obfData.shuffledParams.get(i);
@@ -515,11 +450,9 @@ public class ParamObfTransformer extends ClassTransformer {
             first = false;
         }
 
-        // Compare with expected XOR value
         insns.add(pushIntValue(obfData.expectedXor));
         insns.add(new JumpInsnNode(IF_ICMPEQ, continueLabel));
 
-        // Generate dead code
         insns.add(generateDeadCode());
 
         insns.add(continueLabel);
@@ -568,7 +501,7 @@ public class ParamObfTransformer extends ClassTransformer {
     }
 
     private void convertToBridge(ClassNode classNode, MethodNode originalMethod, MethodObfData obfData) {
-        // Clear original instructions and convert to bridge
+
         originalMethod.instructions.clear();
         originalMethod.tryCatchBlocks = new ArrayList<>();
         originalMethod.localVariables = null;
@@ -576,12 +509,10 @@ public class ParamObfTransformer extends ClassTransformer {
         InsnList bridgeInsns = new InsnList();
         boolean isStatic = (originalMethod.access & ACC_STATIC) != 0;
 
-        // Load 'this' for instance methods
         if (!isStatic) {
             bridgeInsns.add(new VarInsnNode(ALOAD, 0));
         }
 
-        // Calculate original param var indices
         Type[] originalArgs = Type.getArgumentTypes(originalMethod.desc);
         int[] originalVarIndex = new int[originalArgs.length];
         int varIdx = isStatic ? 0 : 1;
@@ -590,36 +521,31 @@ public class ParamObfTransformer extends ClassTransformer {
             varIdx += originalArgs[i].getSize();
         }
 
-        // Push arguments in shuffled order
         for (ParamEntry entry : obfData.shuffledParams) {
             if (entry.isFake()) {
-                // Push magic value
+
                 bridgeInsns.add(pushIntValue(entry.magicValue));
                 if (entry.type.getSort() == Type.LONG) {
                     bridgeInsns.add(new InsnNode(I2L));
                 }
             } else {
-                // Load original argument
+
                 int loadIdx = originalVarIndex[entry.originalIndex];
                 bridgeInsns.add(new VarInsnNode(entry.type.getOpcode(ILOAD), loadIdx));
             }
         }
 
-        // Call the obfuscated method
         int invokeOpcode = isStatic ? INVOKESTATIC : INVOKESPECIAL;
         bridgeInsns.add(new MethodInsnNode(invokeOpcode, classNode.name,
             obfData.obfMethodName, obfData.obfMethodDesc, false));
 
-        // Return
         Type returnType = Type.getReturnType(originalMethod.desc);
         bridgeInsns.add(new InsnNode(returnType.getOpcode(IRETURN)));
 
         originalMethod.instructions = bridgeInsns;
 
-        // Mark as synthetic bridge
         originalMethod.access |= ACC_BRIDGE | ACC_SYNTHETIC;
 
-        // Update max stack/locals
         int stackSize = (isStatic ? 0 : 1);
         for (ParamEntry entry : obfData.shuffledParams) {
             stackSize += entry.type.getSize();
@@ -641,7 +567,7 @@ public class ParamObfTransformer extends ClassTransformer {
     }
 
     private boolean shouldObfuscate(ClassNode classNode, MethodNode methodNode) {
-        // Skip constructors, static initializers, and abstract methods
+
         if (methodNode.name.equals("<init>") ||
             methodNode.name.equals("<clinit>") ||
             (methodNode.access & ACC_ABSTRACT) != 0 ||
@@ -649,23 +575,19 @@ public class ParamObfTransformer extends ClassTransformer {
             return false;
         }
 
-        // Skip synthetic and bridge methods
         if ((methodNode.access & ACC_SYNTHETIC) != 0 ||
             (methodNode.access & ACC_BRIDGE) != 0) {
             return false;
         }
 
-        // Skip main method
         if (methodNode.name.equals("main") && methodNode.desc.equals("([Ljava/lang/String;)V")) {
             return false;
         }
 
-        // Skip interface methods
         if ((classNode.access & ACC_INTERFACE) != 0) {
             return false;
         }
 
-        // Check exclusions
         if (this.getBozar().isExcluded(this, classNode.name + "." + methodNode.name + "()")) {
             return false;
         }
@@ -679,7 +601,6 @@ public class ParamObfTransformer extends ClassTransformer {
         boolean isProtected = (methodNode.access & ACC_PROTECTED) != 0;
         boolean isPackagePrivate = !isPrivate && !isPublic && !isProtected;
 
-        // Check if method overrides a superclass/interface method
         if (!isPrivate && !isStatic) {
             if (overridesExternalMethod(classNode, methodNode)) {
                 return false;

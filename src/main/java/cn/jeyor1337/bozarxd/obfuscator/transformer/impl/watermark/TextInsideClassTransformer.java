@@ -11,7 +11,7 @@ public class TextInsideClassTransformer extends ClassTransformer {
     public TextInsideClassTransformer(Bozar bozar) {
         super(bozar, "Text inside class", BozarCategory.WATERMARK);
     }
-    
+
     @Override
     public void transformClassWriter(ClassWriter classWriter) {
         classWriter.newUTF8(this.getBozar().getConfig().getOptions().getWatermarkOptions().getTextInsideClassText());

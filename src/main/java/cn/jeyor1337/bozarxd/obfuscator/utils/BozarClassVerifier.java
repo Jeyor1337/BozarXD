@@ -23,7 +23,6 @@ public class BozarClassVerifier {
         var classLoader = new URLClassLoader(new URL[] { path.toFile().toURI().toURL() }, parent);
         var classes = new ArrayList<byte[]>();
 
-        // Load JAR
         try (var jarInputStream = new ZipInputStream(Files.newInputStream(path))) {
             ZipEntry zipEntry;
             while ((zipEntry = jarInputStream.getNextEntry()) != null) {
@@ -33,17 +32,15 @@ public class BozarClassVerifier {
             }
         }
 
-        // Loop classes of loaded JAR
         boolean allOK = true;
         for (byte[] classBytes : classes) {
             ClassReader reader = new ClassReader(classBytes);
             ClassNode classNode = new ClassNode();
             reader.accept(classNode, 0);
 
-            // Skip watermark class because we know it's already invalid
             if(classNode.methods.stream().anyMatch(methodNode -> methodNode.name.equals("\u0001") && methodNode.desc.equals("(\u0001/)L\u0001/;")))
                 continue;
-            // Skip crasher class
+
             if(classNode.name.startsWith(CrasherTransformer.PACKAGE_NAME + CrasherTransformer.REPEAT_BASE.repeat(10)))
                 continue;
 
