@@ -333,4 +333,73 @@ public class ASMUtils implements Opcodes {
             default -> throw ex;
         };
     }
+
+    public static void boxPrimitive(String desc, InsnList list) {
+        switch (desc) {
+            case "I" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false));
+            case "Z" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false));
+            case "B" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false));
+            case "C" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;", false));
+            case "S" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;", false));
+            case "J" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false));
+            case "F" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", false));
+            case "D" -> list.add(new MethodInsnNode(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false));
+            default -> {
+                if (!desc.equals("Lnull;") && !desc.equals("Ljava/lang/Object;")) {
+                    String internalName = desc.startsWith("L") && desc.endsWith(";") ? desc.substring(1, desc.length() - 1) : desc;
+                    list.add(new TypeInsnNode(CHECKCAST, internalName));
+                }
+            }
+        }
+    }
+
+    public static void unboxPrimitive(String desc, InsnList list) {
+        switch (desc) {
+            case "I" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Integer"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Integer", "intValue", "()I", false));
+            }
+            case "Z" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Boolean"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Boolean", "booleanValue", "()Z", false));
+            }
+            case "B" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Byte"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Byte", "byteValue", "()B", false));
+            }
+            case "C" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Character"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Character", "charValue", "()C", false));
+            }
+            case "S" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Short"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Short", "shortValue", "()S", false));
+            }
+            case "J" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Long"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Long", "longValue", "()J", false));
+            }
+            case "F" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Float"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Float", "floatValue", "()F", false));
+            }
+            case "D" -> {
+                list.add(new TypeInsnNode(CHECKCAST, "java/lang/Double"));
+                list.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/Double", "doubleValue", "()D", false));
+            }
+            default -> {
+                if (!desc.equals("Lnull;") && !desc.equals("Ljava/lang/Object;")) {
+                    String internalName = desc.startsWith("L") && desc.endsWith(";") ? desc.substring(1, desc.length() - 1) : desc;
+                    list.add(new TypeInsnNode(CHECKCAST, internalName));
+                }
+            }
+        }
+    }
+
+    public static String parentName(String name) {
+        if (name.contains("/")) {
+            return name.substring(0, name.lastIndexOf("/") + 1);
+        }
+        return "";
+    }
 }

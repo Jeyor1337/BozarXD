@@ -5,7 +5,14 @@ import cn.jeyor1337.bozarxd.obfuscator.transformer.ControlFlowTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.utils.ASMUtils;
 import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarCategory;
 import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarConfig;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.analysis.Analyzer;
+import org.objectweb.asm.tree.analysis.BasicInterpreter;
+import org.objectweb.asm.tree.analysis.BasicValue;
+import org.objectweb.asm.tree.analysis.Frame;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -20,9 +27,11 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     private static final double PROXY_BLOCK_PROB = 0.55;
     private static final double GOTO_SWITCH_PROB = 0.45;
     private static final double BOGUS_EXCEPTION_PROB = 0.35;
+    private static final double ADVANCED_EXCEPTION_PROB = 0.40;
 
     private static final int MAX_METHOD_SIZE = 5000;
     private static final int MAX_TRY_CATCH_COUNT = 20;
+    private static final int MAX_CODE_SIZE = 0xFFFF;
 
     private static final int HASH_PRIME_1 = 0x9E3779B1;
     private static final int HASH_PRIME_2 = 0x85EBCA6B;
@@ -30,6 +39,15 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
     private int classSeed;
     private int methodSeed;
     private int transformCounter;
+
+    private String exceptionHandlerName;
+
+    @Override
+    public void pre() {
+        if (this.getBozar().getClasses().isEmpty()) return;
+        ClassNode referenceClass = this.getBozar().getClasses().get(0);
+        createExceptionHandlerClass(referenceClass);
+    }
 
     @Override
     public void transformClass(ClassNode classNode) {
@@ -39,6 +57,48 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
         this.classSeed = ThreadLocalRandom.current().nextInt();
         this.transformCounter = 0;
+    }
+
+    private void createExceptionHandlerClass(ClassNode referenceClass) {
+        String baseName = ASMUtils.parentName(referenceClass.name);
+        String randomSuffix = generateRandomString(5);
+        this.exceptionHandlerName = baseName + randomSuffix;
+
+        for (ClassNode cn : this.getBozar().getClasses()) {
+            if (cn.name.equals(this.exceptionHandlerName)) {
+                this.exceptionHandlerName = baseName + generateRandomString(7);
+                break;
+            }
+        }
+
+        ClassNode handlerClass = new ClassNode();
+        handlerClass.visit(V1_8, ACC_PUBLIC | ACC_SUPER, exceptionHandlerName, null, "java/lang/Throwable", null);
+
+        FieldVisitor fv = handlerClass.visitField(ACC_PUBLIC, "o", "Ljava/lang/Object;", null, null);
+        fv.visitEnd();
+
+        MethodVisitor mv = handlerClass.visitMethod(ACC_PUBLIC, "<init>", "(Ljava/lang/Object;)V", null, null);
+        mv.visitCode();
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Throwable", "<init>", "()V", false);
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitFieldInsn(PUTFIELD, exceptionHandlerName, "o", "Ljava/lang/Object;");
+        mv.visitInsn(RETURN);
+        mv.visitMaxs(2, 2);
+        mv.visitEnd();
+
+        this.getBozar().getClasses().add(handlerClass);
+        System.out.println("[SuperControlFlow] Created exception handler class: " + exceptionHandlerName);
+    }
+
+    private String generateRandomString(int length) {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            sb.append(chars.charAt(ThreadLocalRandom.current().nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 
     @Override
@@ -56,6 +116,10 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
 
         if (canAddTryCatch(methodNode)) {
             applyBogusExceptionFlow(methodNode);
+        }
+
+        if (canAddTryCatch(methodNode) && this.exceptionHandlerName != null) {
+            applyAdvancedExceptionFlow(classNode, methodNode);
         }
 
         System.out.println("[SuperControlFlow] Obfuscated: " + classNode.name + "." + methodNode.name);
@@ -567,6 +631,116 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         }
 
         return insns;
+    }
+
+    private void applyAdvancedExceptionFlow(ClassNode classNode, MethodNode methodNode) {
+        int storeCount = 0;
+        for (AbstractInsnNode insn : methodNode.instructions) {
+            if (insn instanceof VarInsnNode) {
+                int op = insn.getOpcode();
+                if (op >= ISTORE && op <= ASTORE) {
+                    storeCount++;
+                }
+            }
+        }
+
+        if (ASMUtils.getCodeSize(methodNode) + (storeCount * 20) >= MAX_CODE_SIZE) {
+            return;
+        }
+
+        Analyzer<BasicValue> analyzer = new Analyzer<>(new BasicInterpreter());
+        Frame<BasicValue>[] frames;
+
+        try {
+            frames = analyzer.analyzeAndComputeMaxs(classNode.name, methodNode);
+        } catch (Exception ex) {
+            return;
+        }
+
+        List<AbstractInsnNode> toProcess = new ArrayList<>();
+        for (AbstractInsnNode insn : methodNode.instructions) {
+            if (insn instanceof VarInsnNode) {
+                int op = insn.getOpcode();
+                if (op >= ISTORE && op <= ASTORE) {
+                    if (ThreadLocalRandom.current().nextDouble() < ADVANCED_EXCEPTION_PROB) {
+                        toProcess.add(insn);
+                    }
+                }
+            }
+        }
+
+        for (AbstractInsnNode instruction : toProcess) {
+            int insnIndex = methodNode.instructions.indexOf(instruction);
+            if (insnIndex < 0 || insnIndex >= frames.length) continue;
+
+            Frame<BasicValue> frame = frames[insnIndex];
+            if (frame == null || frame.getStackSize() < 1) continue;
+
+            BasicValue value = frame.getStack(frame.getStackSize() - 1);
+            if (value == null || value == BasicValue.UNINITIALIZED_VALUE) continue;
+
+            Type type = value.getType();
+            if (type == null) continue;
+
+            int expectedStackSize = type.getSize();
+            if (frame.getStackSize() != expectedStackSize) continue;
+
+            String typeDesc = type.getDescriptor();
+            if (typeDesc.equals("Lnull;") || typeDesc.equals("Ljava/lang/Object;")) continue;
+
+            if (instruction.getOpcode() == ASTORE && !typeDesc.startsWith("L") && !typeDesc.startsWith("[")) {
+                continue;
+            }
+
+            wrapStoreWithException(methodNode, instruction, typeDesc);
+        }
+    }
+
+    private void wrapStoreWithException(MethodNode methodNode, AbstractInsnNode storeInsn, String typeDesc) {
+        LabelNode tryStart = new LabelNode();
+        LabelNode tryEnd = new LabelNode();
+        LabelNode handler = new LabelNode();
+        LabelNode finish = new LabelNode();
+
+        InsnList list = new InsnList();
+
+        list.add(tryStart);
+
+        ASMUtils.boxPrimitive(typeDesc, list);
+
+        list.add(new TypeInsnNode(NEW, exceptionHandlerName));
+        list.add(new InsnNode(SWAP));
+        list.add(new InsnNode(DUP2));
+        list.add(new InsnNode(POP));
+        list.add(new InsnNode(SWAP));
+        list.add(new MethodInsnNode(INVOKESPECIAL, exceptionHandlerName, "<init>", "(Ljava/lang/Object;)V", false));
+        list.add(new InsnNode(ATHROW));
+
+        LabelNode deadCode = new LabelNode();
+        list.add(new JumpInsnNode(GOTO, deadCode));
+        list.add(deadCode);
+        list.add(ASMUtils.pushInt(ThreadLocalRandom.current().nextInt()));
+        list.add(new InsnNode(POP));
+        list.add(new JumpInsnNode(GOTO, tryStart));
+
+        list.add(handler);
+        list.add(new FieldInsnNode(GETFIELD, exceptionHandlerName, "o", "Ljava/lang/Object;"));
+        ASMUtils.unboxPrimitive(typeDesc, list);
+        list.add(tryEnd);
+        list.add(new JumpInsnNode(GOTO, finish));
+
+        list.add(finish);
+
+        VarInsnNode originalStore = (VarInsnNode) storeInsn;
+        list.add(new VarInsnNode(originalStore.getOpcode(), originalStore.var));
+
+        methodNode.instructions.insert(storeInsn, list);
+        methodNode.instructions.remove(storeInsn);
+
+        if (methodNode.tryCatchBlocks == null) {
+            methodNode.tryCatchBlocks = new ArrayList<>();
+        }
+        methodNode.tryCatchBlocks.add(new TryCatchBlockNode(tryStart, tryEnd, handler, exceptionHandlerName));
     }
 
     private boolean isBackwardJump(MethodNode methodNode, JumpInsnNode jump) {

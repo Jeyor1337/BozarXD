@@ -260,6 +260,7 @@ public class ConstantTransformer extends ClassTransformer {
                 classNode.fields.add(ctx.encryptedField);
                 classNode.fields.add(ctx.decryptedField);
                 classNode.fields.add(ctx.shuffleField);
+                classNode.fields.add(ctx.positionKeysField);
 
                 classNode.methods.add(createDecryptMethod(ctx));
 
@@ -283,6 +284,7 @@ public class ConstantTransformer extends ClassTransformer {
         int varEncrypted = 8, varBuffer = 9, varI = 10, varJ = 11, varXorKey = 12;
         int varDynamicKey = 13, varCharVal = 14, varLowByte = 15;
         int varCallerHash = 16;
+        int varPositionXor = 18;
 
         LabelNode startLabel = new LabelNode();
         LabelNode convertLoopLabel = new LabelNode();
@@ -296,6 +298,9 @@ public class ConstantTransformer extends ClassTransformer {
         LabelNode switchDefaultLabel = switchLabels[255];
         LabelNode afterSwitchLabel = new LabelNode();
         LabelNode antiCopyCheckLabel = new LabelNode();
+        LabelNode[] positionSwitchLabels = new LabelNode[8];
+        for (int i = 0; i < 8; i++) positionSwitchLabels[i] = new LabelNode();
+        LabelNode afterPositionSwitchLabel = new LabelNode();
 
         InsnList insns = new InsnList();
 
@@ -502,6 +507,64 @@ public class ConstantTransformer extends ClassTransformer {
         insns.add(new VarInsnNode(ILOAD, varCallerHash));
         insns.add(new InsnNode(IXOR));
 
+        insns.add(new VarInsnNode(ILOAD, varI));
+        insns.add(ASMUtils.pushInt(8));
+        insns.add(new InsnNode(IREM));
+        insns.add(new TableSwitchInsnNode(0, 7, positionSwitchLabels[7], positionSwitchLabels[0], positionSwitchLabels[1], positionSwitchLabels[2], positionSwitchLabels[3], positionSwitchLabels[4], positionSwitchLabels[5], positionSwitchLabels[6], positionSwitchLabels[7]));
+
+        insns.add(positionSwitchLabels[0]);
+        insns.add(new VarInsnNode(ILOAD, varI));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+        insns.add(new JumpInsnNode(GOTO, afterPositionSwitchLabel));
+
+        insns.add(positionSwitchLabels[1]);
+        insns.add(ASMUtils.pushInt(ctx.positionKey1 ^ ctx.positionKey2));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+        insns.add(new JumpInsnNode(GOTO, afterPositionSwitchLabel));
+
+        insns.add(positionSwitchLabels[2]);
+        insns.add(new VarInsnNode(ILOAD, varI));
+        insns.add(ASMUtils.pushInt(ctx.positionKey2));
+        insns.add(new InsnNode(IXOR));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+        insns.add(new JumpInsnNode(GOTO, afterPositionSwitchLabel));
+
+        insns.add(positionSwitchLabels[3]);
+        insns.add(ASMUtils.pushInt(ctx.positionKey2));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+        insns.add(new JumpInsnNode(GOTO, afterPositionSwitchLabel));
+
+        insns.add(positionSwitchLabels[4]);
+        insns.add(ASMUtils.pushInt(ctx.positionKey1));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+        insns.add(new JumpInsnNode(GOTO, afterPositionSwitchLabel));
+
+        insns.add(positionSwitchLabels[5]);
+        insns.add(ASMUtils.pushInt(ctx.positionKey1));
+        insns.add(new VarInsnNode(ILOAD, varI));
+        insns.add(new InsnNode(IXOR));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+        insns.add(new JumpInsnNode(GOTO, afterPositionSwitchLabel));
+
+        insns.add(positionSwitchLabels[6]);
+        insns.add(new FieldInsnNode(GETSTATIC, ctx.classNode.name, ctx.positionKeysField.name, ctx.positionKeysField.desc));
+        insns.add(ASMUtils.pushInt(6));
+        insns.add(new InsnNode(IALOAD));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+        insns.add(new JumpInsnNode(GOTO, afterPositionSwitchLabel));
+
+        insns.add(positionSwitchLabels[7]);
+        insns.add(new VarInsnNode(ILOAD, varI));
+        insns.add(new FieldInsnNode(GETSTATIC, ctx.classNode.name, ctx.positionKeysField.name, ctx.positionKeysField.desc));
+        insns.add(ASMUtils.pushInt(7));
+        insns.add(new InsnNode(IALOAD));
+        insns.add(new InsnNode(IXOR));
+        insns.add(new VarInsnNode(ISTORE, varPositionXor));
+
+        insns.add(afterPositionSwitchLabel);
+        insns.add(new VarInsnNode(ILOAD, varPositionXor));
+        insns.add(new InsnNode(IXOR));
+
         insns.add(new InsnNode(I2C));
         insns.add(new InsnNode(CASTORE));
 
@@ -527,7 +590,7 @@ public class ConstantTransformer extends ClassTransformer {
 
         method.instructions = insns;
         method.maxStack = 12;
-        method.maxLocals = 18;
+        method.maxLocals = 19;
 
         return method;
     }
@@ -566,6 +629,19 @@ public class ConstantTransformer extends ClassTransformer {
             }
         }
         insns.add(new FieldInsnNode(PUTSTATIC, ctx.classNode.name, ctx.shuffleField.name, ctx.shuffleField.desc));
+
+        insns.add(ASMUtils.pushInt(8));
+        insns.add(new IntInsnNode(NEWARRAY, T_INT));
+        insns.add(new InsnNode(DUP));
+        for (int i = 0; i < 8; i++) {
+            insns.add(ASMUtils.pushInt(i));
+            insns.add(ASMUtils.pushInt(ctx.positionKeys[i]));
+            insns.add(new InsnNode(IASTORE));
+            if (i != 7) {
+                insns.add(new InsnNode(DUP));
+            }
+        }
+        insns.add(new FieldInsnNode(PUTSTATIC, ctx.classNode.name, ctx.positionKeysField.name, ctx.positionKeysField.desc));
 
         return insns;
     }
@@ -826,13 +902,25 @@ public class ConstantTransformer extends ClassTransformer {
         final FieldNode encryptedField;
         final FieldNode decryptedField;
         final FieldNode shuffleField;
+        final FieldNode positionKeysField;
         final String decryptMethodName;
         final long magicSeed;
+        final int[] positionKeys = new int[8];
+        final int positionKey1;
+        final int positionKey2;
 
         StringEncryptionContext(ClassNode classNode) {
             this.classNode = classNode;
             this.keyOfClass = ThreadLocalRandom.current().nextInt(0xFFFFFF, Integer.MAX_VALUE);
             this.magicSeed = ThreadLocalRandom.current().nextLong();
+            this.positionKey1 = ThreadLocalRandom.current().nextInt();
+            this.positionKey2 = ThreadLocalRandom.current().nextInt();
+
+            for (int i = 0; i < 8; i++) {
+                do {
+                    positionKeys[i] = ThreadLocalRandom.current().nextInt();
+                } while (positionKeys[i] == 0);
+            }
 
             for (int i = 0; i < 256; i++) {
                 do {
@@ -870,6 +958,12 @@ public class ConstantTransformer extends ClassTransformer {
             this.shuffleField = new FieldNode(
                     ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
                     baseName + "S",
+                    "[I",
+                    null, null
+            );
+            this.positionKeysField = new FieldNode(
+                    ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
+                    baseName + "P",
                     "[I",
                     null, null
             );
@@ -916,6 +1010,19 @@ public class ConstantTransformer extends ClassTransformer {
                 int xorKey = keyMap[(i ^ index ^ keyOfClass) & 0xFF];
 
                 int encrypted = plaintext.charAt(i) ^ keyOfClass ^ xorKey ^ key[j] ^ ((dynamicKey >>> (i % 32)) & 0xFF);
+
+                int positionXor = switch (i % 8) {
+                    case 0 -> i;
+                    case 1 -> positionKey1 ^ positionKey2;
+                    case 2 -> i ^ positionKey2;
+                    case 3 -> positionKey2;
+                    case 4 -> positionKey1;
+                    case 5 -> positionKey1 ^ i;
+                    case 6 -> positionKeys[i % 8];
+                    case 7 -> i ^ positionKeys[i % 8];
+                    default -> 0;
+                };
+                encrypted ^= positionXor;
 
                 int lowByte = encrypted & 0xFF;
                 int highBits = encrypted & 0xFF00;

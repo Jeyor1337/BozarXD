@@ -1,7 +1,7 @@
 {
-  "input": "/data/data/com.termux/files/home/BozarXD/runTest/TEST.jar",
+  "input": "/data/data/com.termux/files/home/BozarXD/runTest/helloworld.jar",
   "output": "/data/data/com.termux/files/home/BozarXD/runTest/output.jar",
-  "exclude": "com.example.Main\ncom.example.keep.**",
+  "exclude": "SuperControlFlowTransformer:ThreadsController",
   "libraries": [
     "libs/library1.jar",
     "libs/library2.jar"
@@ -16,20 +16,20 @@
     "controlFlowObfuscation": "Super",
     "crasher": false,
     "constantObfuscation": "Super",
-    "antiPrompt": false,
+    "antiPrompt": true,
     "invokeDynamic": true,
     "paramObfuscation": "Light",
     "watermarkOptions": {
-      "dummyClass": false,
-      "textInsideClass": false,
-      "ldcPop": false,
-      "zipComment": false,
-      "badAnno": false,
-      "dummyClassText": "BozarXD",
-      "textInsideClassText": "Obfuscated by BozarXD",
-      "ldcPopText": "BozarXD Watermark",
-      "zipCommentText": "Protected by BozarXD",
-      "badAnnoText": "BozarXD"
+      "dummyClass": true,
+      "textInsideClass": true,
+      "ldcPop": true,
+      "zipComment": true,
+      "badAnno": true,
+      "dummyClassText": "Dimples1337",
+      "textInsideClassText": "Obfuscated by 小h",
+      "ldcPopText": "Yaoer",
+      "zipCommentText": "Protected by 布吉岛 team",
+      "badAnnoText": "妖猫"
     }
   }
 }
