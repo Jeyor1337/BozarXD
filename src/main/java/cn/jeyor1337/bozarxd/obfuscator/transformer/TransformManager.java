@@ -5,6 +5,7 @@ import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.*;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.renamer.ClassRenamerTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.renamer.FieldRenamerTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.renamer.MethodRenamerTransformer;
+import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.BadAnnoTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.DummyClassTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.TextInsideClassTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.UnusedStringTransformer;

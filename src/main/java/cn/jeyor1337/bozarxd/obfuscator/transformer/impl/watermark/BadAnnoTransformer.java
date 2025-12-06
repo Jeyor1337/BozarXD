@@ -1,4 +1,4 @@
-package cn.jeyor1337.bozarxd.obfuscator.transformer.impl;
+package cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark;
 
 import cn.jeyor1337.bozarxd.obfuscator.Bozar;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.ClassTransformer;
@@ -9,25 +9,22 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 public class BadAnnoTransformer extends ClassTransformer {
 
     private static final String DEFAULT_ANNOTATION = "\n\n\n\n\n\n\n\n\n\n\nBOZAR-XD PROTECTED\n\n\n\n\n\n\n\n\n\n\n";
-    private final String annotationDescriptor;
+    private String annotationDescriptor;
     private int counter = 0;
 
     public BadAnnoTransformer(Bozar bozar) {
         super(bozar, "Bad annotation injector", BozarCategory.ADVANCED);
-        this.annotationDescriptor = generateAnnotationDescriptor();
     }
 
     @Override
     public void pre() {
         this.counter = 0;
+        String customText = this.getBozar().getConfig().getOptions().getWatermarkOptions().getBadAnnoText();
+        String data = (customText == null || customText.isEmpty()) ? DEFAULT_ANNOTATION : customText;
+        this.annotationDescriptor = "L" + data + ";";
     }
 
     @Override
@@ -67,28 +64,6 @@ public class BadAnnoTransformer extends ClassTransformer {
         }
         classNode.invisibleAnnotations.add(new AnnotationNode(annotationDescriptor));
         counter++;
-    }
-
-    private String generateAnnotationDescriptor() {
-        String data;
-        String customPath = this.getBozar().getConfig().getOptions().getWatermarkOptions().getBadAnnoText();
-
-        if (customPath == null || customPath.isEmpty()) {
-            data = DEFAULT_ANNOTATION;
-        } else {
-            Path annoPath = Paths.get(customPath);
-            if (Files.notExists(annoPath)) {
-                data = DEFAULT_ANNOTATION;
-            } else {
-                try {
-                    byte[] b = Files.readAllBytes(annoPath);
-                    data = new String(b);
-                } catch (IOException ignored) {
-                    data = DEFAULT_ANNOTATION;
-                }
-            }
-        }
-        return "L" + data + ";";
     }
 
     @Override

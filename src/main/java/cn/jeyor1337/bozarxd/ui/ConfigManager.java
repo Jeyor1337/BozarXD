@@ -7,7 +7,7 @@ import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.DummyClassTran
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.TextInsideClassTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.UnusedStringTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.ZipCommentTransformer;
-import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.BadAnnoTransformer;
+import cn.jeyor1337.bozarxd.obfuscator.transformer.impl.watermark.BadAnnoTransformer;
 import cn.jeyor1337.bozarxd.obfuscator.utils.BozarUtils;
 import cn.jeyor1337.bozarxd.obfuscator.utils.Reflection;
 import cn.jeyor1337.bozarxd.obfuscator.utils.model.BozarConfig;

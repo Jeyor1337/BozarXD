@@ -1,13 +1,13 @@
 {
-  "input": "/data/data/com.termux/files/home/BozarXD/runTest/helloworld.jar",
+  "input": "/data/data/com.termux/files/home/BozarXD/runTest/input.jar",
   "output": "/data/data/com.termux/files/home/BozarXD/runTest/output.jar",
-  "exclude": "SuperControlFlowTransformer:ThreadsController",
+  "exclude": "com.example.Main\ncom.example.keep.**",
   "libraries": [
     "libs/library1.jar",
     "libs/library2.jar"
   ],
   "options": {
-    "rename": "Off",
+    "rename": "Alphabet",
     "lineNumbers": "Delete",
     "localVariables": "Delete",
     "removeSourceFile": true,
@@ -22,14 +22,14 @@
     "watermarkOptions": {
       "dummyClass": true,
       "textInsideClass": true,
-      "ldcPop": true,
+      "ldcPop": false,
       "zipComment": true,
       "badAnno": true,
-      "dummyClassText": "Dimples1337",
-      "textInsideClassText": "Obfuscated by 小h",
-      "ldcPopText": "Yaoer",
-      "zipCommentText": "Protected by 布吉岛 team",
-      "badAnnoText": "妖猫"
+      "dummyClassText": "Heypixel",
+      "textInsideClassText": "Obfuscated by Yaoer",
+      "ldcPopText": "JJ Land Watermark",
+      "zipCommentText": "Protected by Guiwow",
+      "badAnnoText": "Dimples"
     }
   }
 }
