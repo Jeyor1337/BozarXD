@@ -20,8 +20,12 @@ public class CustomClassWriter extends ClassWriter {
     protected String getCommonSuperClass(String type1, String type2) {
         try {
             return super.getCommonSuperClass(type1, type2);
-        } catch (TypeNotPresentException e) {
-            return super.getCommonSuperClass(this.findTypeOrDefault(type1), this.findTypeOrDefault(type2));
+        } catch (RuntimeException e) {
+            try {
+                return super.getCommonSuperClass(this.findTypeOrDefault(type1), this.findTypeOrDefault(type2));
+            } catch (Exception ex) {
+                return "java/lang/Object";
+            }
         }
     }
 

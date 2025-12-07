@@ -80,17 +80,19 @@ java -jar BozarXD-1.7.0-jar-with-auto-modules.jar -input input.jar -output outpu
 
 ## Exclusion/Inclusion Rules
 
-BozarXD supports flexible exclusion and inclusion patterns with a **priority-based rule system**.
-
-> **[Full Documentation](docs/EXCLUSION_RULES.md)** - Complete guide with all patterns, modes, and examples.
+BozarXD supports flexible exclusion and inclusion patterns with a **priority-based rule system** at class and method levels.
 
 ### Quick Reference
 
 | Pattern | Description |
 |---------|-------------|
-| `com.example.Main` | Exact match |
+| `com.example.Main` | Exact class match |
 | `com.example.*` | Single-level wildcard |
 | `com.example.**` | Multi-level wildcard (includes subpackages) |
+| `com.example.Main.methodName()` | Method-level match (any signature) |
+| `com.example.Main.*()` | All methods in class |
+| `com.example.Main.get*()` | Methods starting with "get" |
+| `com.example.Main.test(Ljava/lang/String;)V` | Exact method signature |
 | `!com.example.**` | Include rule (whitelist mode) |
 | `ClassRenamerTransformer:com.example.*` | Transformer-specific rule |
 
@@ -100,18 +102,32 @@ BozarXD supports flexible exclusion and inclusion patterns with a **priority-bas
 - **Whitelist**: Only `!` prefixed patterns are obfuscated
 - **Mixed**: Combine both, most specific rule wins
 
+### Priority Order
+
+Method-level > Class-level, and more specific patterns win over wildcards.
+
 ### Quick Examples
 
-```json
-// Blacklist - exclude from obfuscation
-{ "exclude": "com.example.api.**" }
+```
+# Blacklist - exclude from obfuscation
+com.example.api.**
 
-// Whitelist - only obfuscate these
-{ "exclude": "!com.example.core.**" }
+# Whitelist - only obfuscate these
+!com.example.core.**
 
-// Mixed - include package, exclude subpackage
-{ "exclude": "!com.example.**\ncom.example.util.**" }
+# Mixed - include package, exclude subpackage
+!com.example.**
+com.example.util.**
 
-// Transformer-specific - keep names but obfuscate code
-{ "exclude": "ClassRenamerTransformer:com.example.entities.**" }
+# Method-level exclusion
+com.example.Main.main()
+com.example.Service.handle*()
+com.example.Crypto.*()
+
+# Transformer-specific - keep names but obfuscate code
+ClassRenamerTransformer:com.example.entities.**
+
+# Method-level with transformer
+ConstantTransformer:com.example.Crypto.encrypt()
+LightControlFlowTransformer:com.example.Main.critical*()
 ```

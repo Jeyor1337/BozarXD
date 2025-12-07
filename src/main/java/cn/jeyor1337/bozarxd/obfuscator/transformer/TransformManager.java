@@ -65,7 +65,6 @@ public class TransformManager {
         transformers.add(LightControlFlowTransformer.class);
         transformers.add(HeavyControlFlowTransformer.class);
         transformers.add(SuperControlFlowTransformer.class);
-        transformers.add(UltraControlFlowTransformer.class);
 
         transformers.add(CrasherTransformer.class);
         transformers.add(DummyClassTransformer.class);
@@ -138,7 +137,7 @@ public class TransformManager {
                 .filter(fieldNode -> !this.bozar.isExcluded(classTransformer, ASMUtils.getName(classNode, fieldNode)))
                 .forEach(fieldNode -> classTransformer.transformField(classNode, fieldNode));
         classNode.methods.stream()
-                .filter(methodNode -> !this.bozar.isExcluded(classTransformer, ASMUtils.getName(classNode) + "." + methodNode.name + "()"))
+                .filter(methodNode -> !this.bozar.isExcluded(classTransformer, ASMUtils.getName(classNode, methodNode)))
                 .forEach(methodNode -> {
             AbstractInsnNode[] insns = methodNode.instructions.toArray().clone();
             classTransformer.transformMethod(classNode, methodNode);

@@ -122,7 +122,7 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
             applyAdvancedExceptionFlow(classNode, methodNode);
         }
 
-        System.out.println("[SuperControlFlow] Obfuscated: " + classNode.name + "." + methodNode.name);
+        System.out.println("[SuperControlFlow] Obfuscated: " + classNode.name + "." + methodNode.name + methodNode.desc);
     }
 
     private boolean isInterfaceOrAnnotation(ClassNode classNode) {
@@ -709,24 +709,17 @@ public class SuperControlFlowTransformer extends ControlFlowTransformer {
         ASMUtils.boxPrimitive(typeDesc, list);
 
         list.add(new TypeInsnNode(NEW, exceptionHandlerName));
-        list.add(new InsnNode(SWAP));
-        list.add(new InsnNode(DUP2));
-        list.add(new InsnNode(POP));
-        list.add(new InsnNode(SWAP));
+        list.add(new InsnNode(DUP));
+        list.add(new InsnNode(DUP2_X1));
+        list.add(new InsnNode(POP2));
         list.add(new MethodInsnNode(INVOKESPECIAL, exceptionHandlerName, "<init>", "(Ljava/lang/Object;)V", false));
         list.add(new InsnNode(ATHROW));
 
-        LabelNode deadCode = new LabelNode();
-        list.add(new JumpInsnNode(GOTO, deadCode));
-        list.add(deadCode);
-        list.add(ASMUtils.pushInt(ThreadLocalRandom.current().nextInt()));
-        list.add(new InsnNode(POP));
-        list.add(new JumpInsnNode(GOTO, tryStart));
+        list.add(tryEnd);
 
         list.add(handler);
         list.add(new FieldInsnNode(GETFIELD, exceptionHandlerName, "o", "Ljava/lang/Object;"));
         ASMUtils.unboxPrimitive(typeDesc, list);
-        list.add(tryEnd);
         list.add(new JumpInsnNode(GOTO, finish));
 
         list.add(finish);

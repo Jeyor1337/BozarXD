@@ -1,13 +1,12 @@
 {
-  "input": "/data/data/com.termux/files/home/BozarXD/runTest/input.jar",
+  "input": "/data/data/com.termux/files/home/BozarXD/runTest/client.jar",
   "output": "/data/data/com.termux/files/home/BozarXD/runTest/output.jar",
-  "exclude": "com.example.Main\ncom.example.keep.**",
+  "exclude": "!dev.live.**\nSuperControlFlowTransformer:dev.live.LiveAuthenticationScreen.func_73866_w_()V\nSuperControlFlowTransformer:dev.live.LiveClient.isActive()Z",
   "libraries": [
-    "libs/library1.jar",
-    "libs/library2.jar"
+    "libs/"
   ],
   "options": {
-    "rename": "Alphabet",
+    "rename": "Off",
     "lineNumbers": "Delete",
     "localVariables": "Delete",
     "removeSourceFile": true,
@@ -16,20 +15,21 @@
     "controlFlowObfuscation": "Super",
     "crasher": false,
     "constantObfuscation": "Super",
-    "antiPrompt": true,
+    "antiPrompt": false,
     "invokeDynamic": true,
     "paramObfuscation": "Light",
+    "ignoreVerifyErrors": true,
     "watermarkOptions": {
-      "dummyClass": true,
-      "textInsideClass": true,
+      "dummyClass": false,
+      "textInsideClass": false,
       "ldcPop": false,
-      "zipComment": true,
-      "badAnno": true,
-      "dummyClassText": "Heypixel",
-      "textInsideClassText": "Obfuscated by Yaoer",
-      "ldcPopText": "JJ Land Watermark",
-      "zipCommentText": "Protected by Guiwow",
-      "badAnnoText": "Dimples"
+      "zipComment": false,
+      "badAnno": false,
+      "dummyClassText": "BozarXD",
+      "textInsideClassText": "Obfuscated by BozarXD",
+      "ldcPopText": "BozarXD Watermark",
+      "zipCommentText": "Protected by BozarXD",
+      "badAnnoText": "BozarXD"
     }
   }
 }

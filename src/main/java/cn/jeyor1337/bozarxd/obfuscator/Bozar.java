@@ -154,9 +154,14 @@ public class Bozar implements Runnable {
 
             try {
                 log("Verifying JAR...");
-                if(!BozarClassVerifier.verify(this, this.config.getOutput(), this.classLoader))
-                    err("Invalid classes present");
-                else log("JAR verified successfully!");
+                boolean ignoreErrors = this.config.getOptions().isIgnoreVerifyErrors();
+                if(!BozarClassVerifier.verify(this, this.config.getOutput(), this.classLoader, ignoreErrors)) {
+                    if (!ignoreErrors) {
+                        err("Invalid classes present");
+                    }
+                } else {
+                    log("JAR verified successfully!");
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -173,7 +178,27 @@ public class Bozar implements Runnable {
     }
 
     public boolean isExcluded(ClassTransformer classTransformer, final String str) {
-        final String s = (str.contains("$")) ? str.substring(0, str.indexOf("$")) : str;
+        String normalized = str.replace("/", ".");
+
+        boolean isMethod = normalized.contains("(");
+
+        String className;
+        String methodName = null;
+        if (isMethod) {
+            int lastDot = normalized.lastIndexOf(".");
+            if (lastDot > 0) {
+                className = normalized.substring(0, lastDot);
+                methodName = normalized.substring(lastDot + 1);
+            } else {
+                className = normalized;
+            }
+        } else {
+            className = normalized;
+        }
+
+        if (className.contains("$")) {
+            className = className.substring(0, className.indexOf("$"));
+        }
 
         List<MatchResult> matches = new ArrayList<>();
 
@@ -184,7 +209,7 @@ public class Bozar implements Runnable {
             boolean isInclude = line.startsWith("!");
             String pattern = isInclude ? line.substring(1) : line;
 
-            int specificity = calculateSpecificity(classTransformer, s, pattern);
+            int specificity = calculateSpecificity(classTransformer, className, methodName, isMethod, pattern);
             if (specificity > 0) {
                 matches.add(new MatchResult(isInclude, specificity));
             }
@@ -205,54 +230,108 @@ public class Bozar implements Runnable {
         return !mostSpecific.isInclude;
     }
 
-    private int calculateSpecificity(ClassTransformer classTransformer, final String s, String line) {
+    private int calculateSpecificity(ClassTransformer classTransformer, String className, String methodName, boolean isMethod, String line) {
+        line = line.replace("/", ".");
 
         String targetTransformer = null;
-        if(line.contains(":")) {
+        if (line.contains(":")) {
             targetTransformer = line.split(":")[0];
             line = line.substring((targetTransformer + ":").length());
         }
 
-        if(targetTransformer != null && classTransformer == null) return 0;
-        if(targetTransformer != null && !classTransformer.getName().equals(targetTransformer)) return 0;
+        if (targetTransformer != null && classTransformer == null) return 0;
+        if (targetTransformer != null && !classTransformer.getName().equals(targetTransformer)) return 0;
 
-        int baseScore = 0;
-        boolean matches = false;
+        boolean patternIsMethod = line.contains("(");
 
-        if(line.startsWith("**")) {
-
-            matches = s.endsWith(line.substring(2));
-            baseScore = 100;
-        } else if(line.startsWith("*")) {
-
-            matches = s.endsWith(line.substring(1));
-            baseScore = 200;
-        } else if(line.endsWith("**")) {
-
-            matches = s.startsWith(line.substring(0, line.length() - 2));
-            baseScore = 300;
-        } else if(line.endsWith("*")) {
-
-            matches = s.startsWith(line.substring(0, line.length() - 1))
-                    && s.chars().filter(ch -> ch == '.').count() == line.chars().filter(ch -> ch == '.').count();
-            baseScore = 400;
+        String patternClass;
+        String patternMethod = null;
+        if (patternIsMethod) {
+            int parenIdx = line.indexOf("(");
+            String beforeParen = line.substring(0, parenIdx);
+            int lastDot = beforeParen.lastIndexOf(".");
+            if (lastDot > 0) {
+                patternClass = beforeParen.substring(0, lastDot);
+                patternMethod = line.substring(lastDot + 1);
+            } else {
+                patternClass = beforeParen;
+                patternMethod = line.substring(beforeParen.length());
+            }
         } else {
-
-            matches = line.equals(s);
-            baseScore = 500;
+            patternClass = line;
         }
 
-        if (!matches) return 0;
+        int baseScore = 0;
+        boolean classMatches = matchClassPattern(className, patternClass);
+        if (!classMatches) return 0;
+        baseScore = getClassPatternScore(patternClass);
 
-        int lengthScore = line.replace("*", "").length();
+        if (patternMethod != null && methodName != null) {
+            boolean methodMatches = matchMethodPattern(methodName, patternMethod);
+            if (!methodMatches) return 0;
+            baseScore += 600 + getMethodPatternScore(patternMethod);
+        } else if (patternMethod != null && methodName == null) {
+            return 0;
+        }
 
+        int lengthScore = line.replace("*", "").replace("()", "").length();
         int transformerBonus = targetTransformer != null ? 1000 : 0;
 
         return transformerBonus + baseScore + lengthScore;
     }
 
-    private boolean matchesPattern(ClassTransformer classTransformer, final String s, String line) {
-        return calculateSpecificity(classTransformer, s, line) > 0;
+    private boolean matchClassPattern(String className, String pattern) {
+        if (pattern.startsWith("**")) {
+            return className.endsWith(pattern.substring(2));
+        } else if (pattern.startsWith("*")) {
+            return className.endsWith(pattern.substring(1));
+        } else if (pattern.endsWith("**")) {
+            return className.startsWith(pattern.substring(0, pattern.length() - 2));
+        } else if (pattern.endsWith("*")) {
+            String prefix = pattern.substring(0, pattern.length() - 1);
+            return className.startsWith(prefix)
+                    && className.chars().filter(ch -> ch == '.').count() == pattern.chars().filter(ch -> ch == '.').count();
+        } else {
+            return pattern.equals(className);
+        }
+    }
+
+    private int getClassPatternScore(String pattern) {
+        if (pattern.startsWith("**")) return 100;
+        if (pattern.startsWith("*")) return 200;
+        if (pattern.endsWith("**")) return 300;
+        if (pattern.endsWith("*")) return 400;
+        return 500;
+    }
+
+    private boolean matchMethodPattern(String methodName, String patternMethod) {
+        String name = methodName.contains("(") ? methodName.substring(0, methodName.indexOf("(")) : methodName;
+        String patternName = patternMethod.contains("(") ? patternMethod.substring(0, patternMethod.indexOf("(")) : patternMethod;
+
+        if (patternName.equals("*")) return true;
+        if (patternName.endsWith("*")) {
+            if (!name.startsWith(patternName.substring(0, patternName.length() - 1))) return false;
+        } else if (patternName.startsWith("*")) {
+            if (!name.endsWith(patternName.substring(1))) return false;
+        } else if (!name.equals(patternName)) {
+            return false;
+        }
+
+        String patternDesc = patternMethod.contains("(") ? patternMethod.substring(patternMethod.indexOf("(")) : "()";
+        String methodDesc = methodName.contains("(") ? methodName.substring(methodName.indexOf("(")) : "()";
+
+        if (patternDesc.equals("()") || patternDesc.equals("(*)")) return true;
+        return methodDesc.equals(patternDesc);
+    }
+
+    private int getMethodPatternScore(String patternMethod) {
+        String name = patternMethod.contains("(") ? patternMethod.substring(0, patternMethod.indexOf("(")) : patternMethod;
+        if (name.equals("*")) return 10;
+        if (name.startsWith("*") || name.endsWith("*")) return 30;
+
+        String desc = patternMethod.contains("(") ? patternMethod.substring(patternMethod.indexOf("(")) : "";
+        if (desc.isEmpty() || desc.equals("()") || desc.equals("(*)")) return 50;
+        return 70;
     }
 
     private static class MatchResult {
