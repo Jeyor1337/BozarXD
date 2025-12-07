@@ -140,12 +140,17 @@ public class InvokeDynamicTransformer extends ClassTransformer {
     }
 
     @Override
-    public boolean transformOutput(ClassNode classNode) {
-
-        ClassContext ctx = classContextMap.get(classNode.name);
-        if (ctx != null && !ctx.invokeMap.isEmpty()) {
-            addBootstrapMethod(classNode, ctx, new ArrayList<>(ctx.invokeMap.values()));
+    public void post() {
+        for (ClassNode classNode : this.getBozar().getClasses()) {
+            ClassContext ctx = classContextMap.get(classNode.name);
+            if (ctx != null && !ctx.invokeMap.isEmpty()) {
+                addBootstrapMethod(classNode, ctx, new ArrayList<>(ctx.invokeMap.values()));
+            }
         }
+    }
+
+    @Override
+    public boolean transformOutput(ClassNode classNode) {
         return true;
     }
 

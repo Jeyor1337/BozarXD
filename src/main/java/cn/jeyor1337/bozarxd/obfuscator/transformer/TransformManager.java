@@ -56,11 +56,11 @@ public class TransformManager {
         transformers.add(ShuffleTransformer.class);
         transformers.add(BadAnnoTransformer.class);
 
-        transformers.add(ConstantTransformer.class);
-
         transformers.add(AntiPromptTransformer.class);
         transformers.add(ParamObfTransformer.class);
         transformers.add(InvokeDynamicTransformer.class);
+
+        transformers.add(ConstantTransformer.class);
 
         transformers.add(LightControlFlowTransformer.class);
         transformers.add(HeavyControlFlowTransformer.class);

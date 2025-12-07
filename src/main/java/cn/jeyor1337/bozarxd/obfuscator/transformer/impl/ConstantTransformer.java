@@ -14,6 +14,7 @@ import java.util.stream.IntStream;
 public class ConstantTransformer extends ClassTransformer {
 
     private final Map<String, StringEncryptionContext> classContexts = new HashMap<>();
+    private final Set<String> processedMethods = new HashSet<>();
 
     public ConstantTransformer(Bozar bozar) {
         super(bozar, "Constant obfuscation", BozarCategory.ADVANCED);
@@ -22,6 +23,7 @@ public class ConstantTransformer extends ClassTransformer {
     @Override
     public void pre() {
         classContexts.clear();
+        processedMethods.clear();
     }
 
     private enum NumberObfType {
@@ -199,6 +201,8 @@ public class ConstantTransformer extends ClassTransformer {
 
     @Override
     public void transformMethod(ClassNode classNode, MethodNode methodNode) {
+        processedMethods.add(classNode.name + "." + methodNode.name + methodNode.desc);
+
         if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SUPER) {
 
             StringEncryptionContext ctx = classContexts.computeIfAbsent(classNode.name,
@@ -251,6 +255,18 @@ public class ConstantTransformer extends ClassTransformer {
     @Override
     public void post() {
 
+        for (ClassNode classNode : this.getBozar().getClasses()) {
+            for (MethodNode methodNode : classNode.methods) {
+                String key = classNode.name + "." + methodNode.name + methodNode.desc;
+                if (!processedMethods.contains(key)) {
+                    if (this.getBozar().isExcluded(this, ASMUtils.getName(classNode, methodNode))) {
+                        continue;
+                    }
+                    processNewMethodStrings(classNode, methodNode);
+                }
+            }
+        }
+
         if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SUPER) {
             for (StringEncryptionContext ctx : classContexts.values()) {
                 if (ctx.strings.isEmpty()) continue;
@@ -269,6 +285,43 @@ public class ConstantTransformer extends ClassTransformer {
             }
         }
         classContexts.clear();
+        processedMethods.clear();
+    }
+
+    private void processNewMethodStrings(ClassNode classNode, MethodNode methodNode) {
+        if (this.getBozar().getConfig().getOptions().getConstantObfuscation() == BozarConfig.BozarOptions.ConstantObfuscationOption.SUPER) {
+            StringEncryptionContext ctx = classContexts.computeIfAbsent(classNode.name,
+                k -> new StringEncryptionContext(classNode));
+
+            Arrays.stream(methodNode.instructions.toArray())
+                    .filter(insn -> insn instanceof LdcInsnNode && ((LdcInsnNode) insn).cst instanceof String)
+                    .map(insn -> (LdcInsnNode) insn)
+                    .forEach(ldc -> {
+                        String str = (String) ldc.cst;
+                        int index = ctx.addString(str);
+
+                        InsnList insnList = new InsnList();
+
+                        int encrypted = index ^ ctx.keyOfClass;
+                        insnList.add(ASMUtils.pushInt(encrypted >>> 16));
+                        insnList.add(ASMUtils.pushInt(encrypted & 0xFFFF));
+                        insnList.add(ASMUtils.pushLong(ctx.getKeyLong(index)));
+                        insnList.add(new MethodInsnNode(INVOKESTATIC, classNode.name,
+                                ctx.decryptMethodName, "(IIJ)Ljava/lang/String;",
+                                (classNode.access & ACC_INTERFACE) != 0));
+
+                        methodNode.instructions.insertBefore(ldc, insnList);
+                        methodNode.instructions.remove(ldc);
+                    });
+        } else {
+            Arrays.stream(methodNode.instructions.toArray())
+                    .filter(insn -> insn instanceof LdcInsnNode && ((LdcInsnNode) insn).cst instanceof String)
+                    .map(insn -> (LdcInsnNode) insn)
+                    .forEach(ldc -> {
+                        methodNode.instructions.insertBefore(ldc, this.convertString(methodNode, (String) ldc.cst));
+                        methodNode.instructions.remove(ldc);
+                    });
+        }
     }
 
     private MethodNode createDecryptMethod(StringEncryptionContext ctx) {

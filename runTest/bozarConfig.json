@@ -1,7 +1,7 @@
 {
-  "input": "/data/data/com.termux/files/home/BozarXD/runTest/client.jar",
+  "input": "/data/data/com.termux/files/home/BozarXD/runTest/TEST.jar",
   "output": "/data/data/com.termux/files/home/BozarXD/runTest/output.jar",
-  "exclude": "!dev.live.**\nSuperControlFlowTransformer:dev.live.LiveAuthenticationScreen.func_73866_w_()V\nSuperControlFlowTransformer:dev.live.LiveClient.isActive()Z",
+  "exclude": "dev.live.**\nSuperControlFlowTransformer:dev.live.LiveAuthenticationScreen.func_73866_w_()V\nSuperControlFlowTransformer:dev.live.LiveClient.isActive()Z",
   "libraries": [
     "libs/"
   ],
